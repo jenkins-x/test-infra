@@ -19,6 +19,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/ghodss/yaml"
+	"io/ioutil"
 	"testing"
 	"time"
 
@@ -1061,4 +1063,44 @@ func TestProwJobStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCastProwJobObj(t *testing.T) {
+	pj := &prowjobv1.ProwJob{}
+
+	testFile, err := ioutil.ReadFile("test-pj.yaml")
+	if err != nil {
+		t.Fatalf("failed to read file: %v", err)
+	}
+
+	err = yaml.Unmarshal(testFile, pj)
+	if err != nil {
+		t.Fatalf("failed to unmarshal yaml: %v", err)
+	}
+
+	err = castWithPointer(pj)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	err = castNoPointer(pj)
+	if err == nil {
+		t.Fatal("no error returned casting prowjob without a pointer", err)
+	}
+}
+
+func castWithPointer (obj interface{}) error {
+	_, ok := obj.(*prowjobv1.ProwJob)
+	if !ok {
+		return fmt.Errorf("ignoring bad prowjob: %v", obj)
+	}
+	return nil
+}
+
+func castNoPointer (obj interface{}) error {
+	_, ok := obj.(prowjobv1.ProwJob)
+	if !ok {
+		return fmt.Errorf("ignoring bad prowjob: %v", obj)
+	}
+	return nil
 }
