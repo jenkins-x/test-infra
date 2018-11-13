@@ -107,7 +107,7 @@ func newController(kc kubernetes.Interface, pjc prowjobset.Interface, pji prowjo
 	// Reconcile whenever a prowjob changes
 	pji.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			pj, ok := obj.(prowjobv1.ProwJob)
+			pj, ok := obj.(*prowjobv1.ProwJob)
 			if !ok {
 				logrus.Warnf("Ignoring bad prowjob add: %v", obj)
 				return
@@ -115,7 +115,7 @@ func newController(kc kubernetes.Interface, pjc prowjobset.Interface, pji prowjo
 			c.enqueueKey(pj.Spec.Cluster, pj)
 		},
 		UpdateFunc: func(old, new interface{}) {
-			pj, ok := new.(prowjobv1.ProwJob)
+			pj, ok := new.(*prowjobv1.ProwJob)
 			if !ok {
 				logrus.Warnf("Ignoring bad prowjob update: %v", new)
 				return
@@ -123,7 +123,7 @@ func newController(kc kubernetes.Interface, pjc prowjobset.Interface, pji prowjo
 			c.enqueueKey(pj.Spec.Cluster, pj)
 		},
 		DeleteFunc: func(obj interface{}) {
-			pj, ok := obj.(prowjobv1.ProwJob)
+			pj, ok := obj.(*prowjobv1.ProwJob)
 			if !ok {
 				logrus.Warnf("Ignoring bad prowjob delete: %v", obj)
 				return
@@ -206,9 +206,9 @@ func fromKey(key string) (string, string, string, error) {
 func (c *controller) enqueueKey(ctx string, obj interface{}) {
 	var meta metav1.ObjectMeta
 	switch o := obj.(type) {
-	case prowjobv1.ProwJob:
+	case *prowjobv1.ProwJob:
 		meta = o.ObjectMeta
-	case buildv1alpha1.Build:
+	case *buildv1alpha1.Build:
 		meta = o.ObjectMeta
 	default:
 		logrus.Warnf("cannot enqueue unknown type %v: %v", o, obj)
