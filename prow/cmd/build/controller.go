@@ -235,21 +235,21 @@ func (c *controller) getProwJob(namespace, name string) (*prowjobv1.ProwJob, err
 func (c *controller) getBuild(context, namespace, name string) (*buildv1alpha1.Build, error) {
 	b, ok := c.builds[context]
 	if !ok {
-		return nil, errors.New("context not found")
+		return nil, fmt.Errorf("context not found: [%s]", context)
 	}
 	return b.informer.Lister().Builds(namespace).Get(name)
 }
 func (c *controller) deleteBuild(context, namespace, name string) error {
 	b, ok := c.builds[context]
 	if !ok {
-		return errors.New("context not found")
+		return fmt.Errorf("context not found: [%s]", context)
 	}
 	return b.client.BuildV1alpha1().Builds(namespace).Delete(name, &metav1.DeleteOptions{})
 }
 func (c *controller) createBuild(context, namespace string, b *buildv1alpha1.Build) (*buildv1alpha1.Build, error) {
 	bc, ok := c.builds[context]
 	if !ok {
-		return nil, errors.New("context not found")
+		return nil, fmt.Errorf("context not found: [%s]", context)
 	}
 	return bc.client.BuildV1alpha1().Builds(namespace).Create(b)
 }
