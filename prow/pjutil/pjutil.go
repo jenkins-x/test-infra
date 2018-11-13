@@ -117,6 +117,14 @@ func PresubmitSpec(p config.Presubmit, refs kube.Refs) kube.ProwJobSpec {
 			pjs.Cluster = kube.DefaultClusterAlias
 		}
 	}
+	if pjs.Agent == kube.BuildAgent {
+		pjs.BuildSpec = p.BuildSpec
+		pjs.Cluster = p.Cluster
+		if pjs.Cluster == "" {
+			pjs.Cluster = kube.DefaultClusterAlias
+		}
+		//interpolateEnvVars(&pjs, refs)
+	}
 	for _, nextP := range p.RunAfterSuccess {
 		pjs.RunAfterSuccess = append(pjs.RunAfterSuccess, PresubmitSpec(nextP, refs))
 	}
@@ -150,6 +158,14 @@ func PostsubmitSpec(p config.Postsubmit, refs kube.Refs) kube.ProwJobSpec {
 			pjs.Cluster = kube.DefaultClusterAlias
 		}
 	}
+	if pjs.Agent == kube.BuildAgent {
+		pjs.BuildSpec = p.BuildSpec
+		pjs.Cluster = p.Cluster
+		if pjs.Cluster == "" {
+			pjs.Cluster = kube.DefaultClusterAlias
+		}
+		//interpolateEnvVars(&pjs, refs)
+	}
 	for _, nextP := range p.RunAfterSuccess {
 		pjs.RunAfterSuccess = append(pjs.RunAfterSuccess, PostsubmitSpec(nextP, refs))
 	}
@@ -172,6 +188,14 @@ func PeriodicSpec(p config.Periodic) kube.ProwJobSpec {
 		if pjs.Cluster == "" {
 			pjs.Cluster = kube.DefaultClusterAlias
 		}
+	}
+	if pjs.Agent == kube.BuildAgent {
+		pjs.BuildSpec = p.BuildSpec
+		pjs.Cluster = p.Cluster
+		if pjs.Cluster == "" {
+			pjs.Cluster = kube.DefaultClusterAlias
+		}
+		//interpolateEnvVars(&pjs, refs)
 	}
 	for _, nextP := range p.RunAfterSuccess {
 		pjs.RunAfterSuccess = append(pjs.RunAfterSuccess, PeriodicSpec(nextP))
@@ -204,6 +228,14 @@ func BatchSpec(p config.Presubmit, refs kube.Refs) kube.ProwJobSpec {
 		if pjs.Cluster == "" {
 			pjs.Cluster = kube.DefaultClusterAlias
 		}
+	}
+	if pjs.Agent == kube.BuildAgent {
+		pjs.BuildSpec = p.BuildSpec
+		pjs.Cluster = p.Cluster
+		if pjs.Cluster == "" {
+			pjs.Cluster = kube.DefaultClusterAlias
+		}
+		//interpolateEnvVars(&pjs, refs)
 	}
 	for _, nextP := range p.RunAfterSuccess {
 		pjs.RunAfterSuccess = append(pjs.RunAfterSuccess, BatchSpec(nextP, refs))
