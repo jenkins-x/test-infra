@@ -280,6 +280,9 @@ func reconcile(c reconciler, key string) error {
 		runtime.HandleError(err)
 		return nil
 	}
+	// JR not sure what to do.  context is 'serverless-jenkins' but the default context in c.builds is '' see https://github.com/kubernetes/test-infra/blob/6d46fd1/prow/cmd/build/main.go#L99-L100
+	// so for now let's use the default context
+	ctx = *new(string)
 
 	var wantBuild bool
 
@@ -292,9 +295,9 @@ func reconcile(c reconciler, key string) error {
 		return fmt.Errorf("get prowjob: %v", err)
 	case pj.Spec.Agent != prowjobv1.KnativeBuildAgent:
 		// Do not want a build for this job
-	case pj.Spec.Cluster != ctx:
-		// Build is in wrong cluster, we do not want this build
-		logrus.Warnf("%s found in context %s not %s", key, ctx, pj.Spec.Cluster)
+	//case pj.Spec.Cluster != ctx:
+	//	// Build is in wrong cluster, we do not want this build
+	//	logrus.Warnf("%s found in context %s not %s", key, ctx, pj.Spec.Cluster)
 	case pj.DeletionTimestamp == nil:
 		wantBuild = true
 	}
@@ -513,26 +516,36 @@ func injectSource(b *buildv1alpha1.Build, pj prowjobv1.ProwJob) error {
 	if err != nil {
 		return fmt.Errorf("clone source error: %v", err)
 	}
-	if srcContainer == nil {
-		return nil
-	}
+	if srcContainer == nil && pj.Spec.Refs != nil{
+		// lets fall back to vanilla knative source step
+		// lets also clean this up
+		sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
 
-	b.Spec.Source = &buildv1alpha1.SourceSpec{
-		Custom: srcContainer,
-	}
-	b.Spec.Volumes = append(b.Spec.Volumes, cloneVolumes...)
-
-	wd := workDir(refs[0])
-	// Inject correct working directory
-	for i := range b.Spec.Steps {
-		if b.Spec.Steps[i].WorkingDir != "" {
-			continue
+		b.Spec.Source = &buildv1alpha1.SourceSpec{
+			Git: &buildv1alpha1.GitSourceSpec{
+				Url: sourceURL,
+				Revision: pj.Spec.Refs.Pulls[0].SHA,
+			},
 		}
-		b.Spec.Steps[i].WorkingDir = wd.Value
-	}
-	if b.Spec.Template != nil {
-		// Best we can do for a template is to set WORKDIR
-		b.Spec.Template.Arguments = append(b.Spec.Template.Arguments, wd)
+	} else if srcContainer == nil{
+		return nil
+	} else {
+		b.Spec.Source = &buildv1alpha1.SourceSpec{
+			Custom: srcContainer,
+		}
+		b.Spec.Volumes = append(b.Spec.Volumes, cloneVolumes...)
+		wd := workDir(refs[0])
+		// Inject correct working directory
+		for i := range b.Spec.Steps {
+			if b.Spec.Steps[i].WorkingDir != "" {
+				continue
+			}
+			b.Spec.Steps[i].WorkingDir = wd.Value
+		}
+		if b.Spec.Template != nil {
+			// Best we can do for a template is to set WORKDIR
+			b.Spec.Template.Arguments = append(b.Spec.Template.Arguments, wd)
+		}
 	}
 
 	return nil
