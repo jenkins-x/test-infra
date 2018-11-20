@@ -476,6 +476,20 @@ func defaultArguments(t *buildv1alpha1.TemplateInstantiationSpec, rawEnv map[str
 	}
 }
 
+// defaultArguments will append each arg to the template, except where the argument name is already defined.
+func defaultTemplateenv(t *buildv1alpha1.TemplateInstantiationSpec, rawEnv map[string]string) {
+	keys := sets.String{}
+	for _, arg := range t.Env {
+		keys.Insert(arg.Name)
+	}
+	for k, v := range rawEnv {
+		if keys.Has(k) {
+			continue
+		}
+		t.Env = append(t.Env, untypedcorev1.EnvVar{Name: k, Value: v})
+	}
+}
+
 // defaultEnv adds the map of environment variables to the container, except keys already defined.
 func defaultEnv(c *untypedcorev1.Container, rawEnv map[string]string) {
 	keys := sets.String{}
@@ -495,8 +509,8 @@ func injectEnvironment(b *buildv1alpha1.Build, rawEnv map[string]string) {
 	for i := range b.Spec.Steps { // Inject environment variables to each step
 		defaultEnv(&b.Spec.Steps[i], rawEnv)
 	}
-	if b.Spec.Template != nil { // Also add it as template arguments
-		defaultArguments(b.Spec.Template, rawEnv)
+	if b.Spec.Template != nil { // Also add environment variables to templates
+		defaultTemplateenv(b.Spec.Template, rawEnv)
 	}
 }
 
@@ -521,10 +535,17 @@ func injectSource(b *buildv1alpha1.Build, pj prowjobv1.ProwJob) error {
 		// lets also clean this up
 		sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
 
+		var revision string
+		if len(pj.Spec.Refs.Pulls) > 0  {
+			revision = pj.Spec.Refs.Pulls[0].SHA
+		} else {
+			revision = pj.Spec.Refs.BaseSHA
+		}
+
 		b.Spec.Source = &buildv1alpha1.SourceSpec{
 			Git: &buildv1alpha1.GitSourceSpec{
 				Url: sourceURL,
-				Revision: pj.Spec.Refs.Pulls[0].SHA,
+				Revision: revision,
 			},
 		}
 	} else if srcContainer == nil{
