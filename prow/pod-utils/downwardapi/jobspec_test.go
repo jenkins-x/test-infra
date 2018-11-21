@@ -70,6 +70,8 @@ func TestEnvironmentForSpec(t *testing.T) {
 				"PULL_BASE_REF": "base-ref",
 				"PULL_BASE_SHA": "base-sha",
 				"PULL_REFS":     "base-ref:base-sha",
+				"BRANCH_NAME":   "base-ref",
+				"SOURCE_URL":    "",
 			},
 		},
 		{
@@ -106,6 +108,8 @@ func TestEnvironmentForSpec(t *testing.T) {
 				"PULL_BASE_REF": "base-ref",
 				"PULL_BASE_SHA": "base-sha",
 				"PULL_REFS":     "base-ref:base-sha,1:pull-sha,2:second-pull-sha",
+				"BRANCH_NAME":   "base-ref",
+				"SOURCE_URL":    "",
 			},
 		},
 		{
@@ -140,6 +144,8 @@ func TestEnvironmentForSpec(t *testing.T) {
 				"PULL_REFS":     "base-ref:base-sha,1:pull-sha",
 				"PULL_NUMBER":   "1",
 				"PULL_PULL_SHA": "pull-sha",
+				"BRANCH_NAME":   "PR-1",
+				"SOURCE_URL":    "",
 			},
 		},
 		{
