@@ -95,6 +95,9 @@ const (
 	pullRefsEnv    = "PULL_REFS"
 	pullNumberEnv  = "PULL_NUMBER"
 	pullPullShaEnv = "PULL_PULL_SHA"
+
+	branchNameEnv = "BRANCH_NAME"
+	sourceURLEnv  = "SOURCE_URL"
 )
 
 // EnvForSpec returns a mapping of environment variables
@@ -128,12 +131,18 @@ func EnvForSpec(spec JobSpec) (map[string]string, error) {
 	env[pullBaseRefEnv] = spec.Refs.BaseRef
 	env[pullBaseShaEnv] = spec.Refs.BaseSHA
 	env[pullRefsEnv] = spec.Refs.String()
+	env[sourceURLEnv] = spec.Refs.CloneURI
+	env[branchNameEnv] = spec.Refs.BaseRef
 
 	if spec.Type == kube.PostsubmitJob || spec.Type == kube.BatchJob {
 		return env, nil
 	}
-	env[pullNumberEnv] = strconv.Itoa(spec.Refs.Pulls[0].Number)
-	env[pullPullShaEnv] = spec.Refs.Pulls[0].SHA
+
+	if len(spec.Refs.Pulls) > 0 {
+		env[pullNumberEnv] = strconv.Itoa(spec.Refs.Pulls[0].Number)
+		env[pullPullShaEnv] = spec.Refs.Pulls[0].SHA
+		env[branchNameEnv] = fmt.Sprintf("PR-%v", spec.Refs.Pulls[0].Number)
+	}
 	return env, nil
 }
 

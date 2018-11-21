@@ -424,6 +424,7 @@ func TestProwJobToPod(t *testing.T) {
 							Image: "tester",
 							Env: []v1.EnvVar{
 								{Name: "MY_ENV", Value: "rocks"},
+								{Name: "BRANCH_NAME", Value:"PR-1"},
 								{Name: "BUILD_ID", Value: "blabla"},
 								{Name: "BUILD_NUMBER", Value: "blabla"},
 								{Name: "JOB_NAME", Value: "job-name"},
@@ -437,6 +438,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
+								{Name: "SOURCE_URL", Value:""},
 							},
 						},
 					},
@@ -581,6 +583,7 @@ func TestProwJobToPod(t *testing.T) {
 							Env: []v1.EnvVar{
 								{Name: "MY_ENV", Value: "rocks"},
 								{Name: "ARTIFACTS", Value: "/logs/artifacts"},
+								{Name: "BRANCH_NAME", Value:"PR-1"},
 								{Name: "BUILD_ID", Value: "blabla"},
 								{Name: "BUILD_NUMBER", Value: "blabla"},
 								{Name: "ENTRYPOINT_OPTIONS", Value: `{"args":["/bin/thing","some","args"],"timeout":7200000000000,"grace_period":10000000000,"artifact_dir":"/logs/artifacts","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt"}`},
@@ -596,6 +599,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
+								{Name: "SOURCE_URL", Value: ""},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -802,6 +806,7 @@ func TestProwJobToPod(t *testing.T) {
 							Env: []v1.EnvVar{
 								{Name: "MY_ENV", Value: "rocks"},
 								{Name: "ARTIFACTS", Value: "/logs/artifacts"},
+								{Name: "BRANCH_NAME", Value:"PR-1"},
 								{Name: "BUILD_ID", Value: "blabla"},
 								{Name: "BUILD_NUMBER", Value: "blabla"},
 								{Name: "ENTRYPOINT_OPTIONS", Value: `{"args":["/bin/thing","some","args"],"timeout":7200000000000,"grace_period":10000000000,"artifact_dir":"/logs/artifacts","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt"}`},
@@ -817,6 +822,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
+								{Name: "SOURCE_URL", Value: ""},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -1032,6 +1038,7 @@ func TestProwJobToPod(t *testing.T) {
 							Env: []v1.EnvVar{
 								{Name: "MY_ENV", Value: "rocks"},
 								{Name: "ARTIFACTS", Value: "/logs/artifacts"},
+								{Name: "BRANCH_NAME", Value:"PR-1"},
 								{Name: "BUILD_ID", Value: "blabla"},
 								{Name: "BUILD_NUMBER", Value: "blabla"},
 								{Name: "ENTRYPOINT_OPTIONS", Value: `{"args":["/bin/thing","some","args"],"timeout":7200000000000,"grace_period":10000000000,"artifact_dir":"/logs/artifacts","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt"}`},
@@ -1047,6 +1054,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
+								{Name: "SOURCE_URL", Value: ""},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -1278,6 +1286,7 @@ func TestProwJobToPod(t *testing.T) {
 							Env: []v1.EnvVar{
 								{Name: "MY_ENV", Value: "rocks"},
 								{Name: "ARTIFACTS", Value: "/logs/artifacts"},
+								{Name: "BRANCH_NAME", Value:"PR-1"},
 								{Name: "BUILD_ID", Value: "blabla"},
 								{Name: "BUILD_NUMBER", Value: "blabla"},
 								{Name: "ENTRYPOINT_OPTIONS", Value: `{"args":["/bin/thing","some","args"],"timeout":7200000000000,"grace_period":10000000000,"artifact_dir":"/logs/artifacts","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt"}`},
@@ -1293,6 +1302,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
+								{Name: "SOURCE_URL", Value: ""},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -1662,6 +1672,7 @@ func TestProwJobToPod(t *testing.T) {
 							Env: []v1.EnvVar{
 								{Name: "MY_ENV", Value: "rocks"},
 								{Name: "ARTIFACTS", Value: "/logs/artifacts"},
+								{Name: "BRANCH_NAME", Value:"PR-1"},
 								{Name: "BUILD_ID", Value: "blabla"},
 								{Name: "BUILD_NUMBER", Value: "blabla"},
 								{Name: "ENTRYPOINT_OPTIONS", Value: `{"args":["/bin/thing","some","args"],"timeout":7200000000000,"grace_period":10000000000,"artifact_dir":"/logs/artifacts","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt"}`},
@@ -1677,6 +1688,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
+								{Name: "SOURCE_URL", Value: ""},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
