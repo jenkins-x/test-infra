@@ -131,7 +131,13 @@ func EnvForSpec(spec JobSpec) (map[string]string, error) {
 	env[pullBaseRefEnv] = spec.Refs.BaseRef
 	env[pullBaseShaEnv] = spec.Refs.BaseSHA
 	env[pullRefsEnv] = spec.Refs.String()
-	env[sourceURLEnv] = spec.Refs.CloneURI
+	if spec.Refs.CloneURI == "" {
+		sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", spec.Refs.Org, spec.Refs.Repo)
+		env[sourceURLEnv] = sourceURL
+	} else {
+		env[sourceURLEnv] = spec.Refs.CloneURI
+	}
+
 	env[branchNameEnv] = spec.Refs.BaseRef
 
 	if spec.Type == kube.PostsubmitJob || spec.Type == kube.BatchJob {

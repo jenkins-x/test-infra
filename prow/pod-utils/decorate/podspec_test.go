@@ -438,7 +438,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
-								{Name: "SOURCE_URL", Value:""},
+								{Name: "SOURCE_URL", Value: "https://github.com/org-name/repo-name.git"},
 							},
 						},
 					},
@@ -599,7 +599,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
-								{Name: "SOURCE_URL", Value: ""},
+								{Name: "SOURCE_URL", Value: "https://github.com/org-name/repo-name.git"},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -822,7 +822,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
-								{Name: "SOURCE_URL", Value: ""},
+								{Name: "SOURCE_URL", Value: "https://github.com/org-name/repo-name.git"},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -1054,7 +1054,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
-								{Name: "SOURCE_URL", Value: ""},
+								{Name: "SOURCE_URL", Value: "https://github.com/org-name/repo-name.git"},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -1302,7 +1302,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
-								{Name: "SOURCE_URL", Value: ""},
+								{Name: "SOURCE_URL", Value: "https://github.com/org-name/repo-name.git"},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -1688,7 +1688,7 @@ func TestProwJobToPod(t *testing.T) {
 								{Name: "PULL_REFS", Value: "base-ref:base-sha,1:pull-sha"},
 								{Name: "REPO_NAME", Value: "repo-name"},
 								{Name: "REPO_OWNER", Value: "org-name"},
-								{Name: "SOURCE_URL", Value: ""},
+								{Name: "SOURCE_URL", Value: "https://github.com/org-name/repo-name.git"},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
