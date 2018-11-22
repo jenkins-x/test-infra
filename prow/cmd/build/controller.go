@@ -262,7 +262,10 @@ func (c *controller) now() metav1.Time {
 }
 
 func (c *controller) buildID(pj prowjobv1.ProwJob) (string, error) {
-	return pjutil.GetBuildID(pj.Spec.Job, c.totURL)
+	// todo not sure how to sort this out yet, but this is now Jenkins X specific
+	branch := downwardapi.GetBranch(downwardapi.NewJobSpec(pj.Spec, "", pj.Name))
+	jobName := fmt.Sprintf("%s-%s-%s", pj.Spec.Refs.Org, pj.Spec.Refs.Repo, branch)
+	return pjutil.GetBuildID(jobName, c.totURL)
 }
 
 var (

@@ -138,7 +138,12 @@ func EnvForSpec(spec JobSpec) (map[string]string, error) {
 		env[sourceURLEnv] = spec.Refs.CloneURI
 	}
 
-	env[branchNameEnv] = spec.Refs.BaseRef
+	branch := GetBranch(spec)
+	env[branchNameEnv] = branch
+
+	// TODO JR wonder how to make this configurable, maybe with an env var or flag on the cli args to enable Jenkins based env vars?
+	env[jobNameEnv] = fmt.Sprintf("%s/%s/%s", spec.Refs.Org, spec.Refs.Repo, branch)
+
 
 	if spec.Type == kube.PostsubmitJob || spec.Type == kube.BatchJob {
 		return env, nil
@@ -149,7 +154,20 @@ func EnvForSpec(spec JobSpec) (map[string]string, error) {
 		env[pullPullShaEnv] = spec.Refs.Pulls[0].SHA
 		env[branchNameEnv] = fmt.Sprintf("PR-%v", spec.Refs.Pulls[0].Number)
 	}
+
+
 	return env, nil
+}
+
+func GetBranch(spec JobSpec) string {
+	branch := spec.Refs.BaseRef
+	if spec.Type == kube.PostsubmitJob || spec.Type == kube.BatchJob {
+		return branch
+	}
+	if len(spec.Refs.Pulls) > 0 {
+		branch = fmt.Sprintf("PR-%v", spec.Refs.Pulls[0].Number)
+	}
+	return branch
 }
 
 // EnvForType returns the slice of environment variables to export for jobType
