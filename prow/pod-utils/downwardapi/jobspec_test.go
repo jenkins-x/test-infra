@@ -60,7 +60,7 @@ func TestEnvironmentForSpec(t *testing.T) {
 				},
 			},
 			expected: map[string]string{
-				"JOB_NAME":      "job-name",
+				"JOB_NAME":      "org-name/repo-name/base-ref",
 				"BUILD_ID":      "0",
 				"PROW_JOB_ID":   "prowjob",
 				"JOB_TYPE":      "postsubmit",
@@ -98,7 +98,7 @@ func TestEnvironmentForSpec(t *testing.T) {
 				},
 			},
 			expected: map[string]string{
-				"JOB_NAME":      "job-name",
+				"JOB_NAME":      "org-name/repo-name/base-ref",
 				"BUILD_ID":      "0",
 				"PROW_JOB_ID":   "prowjob",
 				"JOB_TYPE":      "batch",
@@ -132,7 +132,7 @@ func TestEnvironmentForSpec(t *testing.T) {
 				},
 			},
 			expected: map[string]string{
-				"JOB_NAME":      "job-name",
+				"JOB_NAME":      "org-name/repo-name/PR-1",
 				"BUILD_ID":      "0",
 				"PROW_JOB_ID":   "prowjob",
 				"JOB_TYPE":      "presubmit",
