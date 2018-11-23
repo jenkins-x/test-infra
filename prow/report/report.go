@@ -21,6 +21,7 @@ package report
 import (
 	"bytes"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"text/template"
 
@@ -54,6 +55,10 @@ func reportStatus(ghc GithubClient, pj kube.ProwJob, childDescription string) er
 			contextState = kube.FailureState
 		}
 
+		if contextState == kube.TriggeredState {
+			contextState = kube.PendingState
+		}
+
 		// find a better way to do this, but using the current failed description fails GitHub validation as exceeds 140 chars
 		// example description:
 		// 'build step "build-step-unnamed-2" exited with code 2 (image: "docker-pullable://jenkinsxio/jenkins-go@sha256:9104890bc0fdbed7535bf707cabaf3ddcb512170f9298f0dbad715953847d0ce");
@@ -72,7 +77,16 @@ func reportStatus(ghc GithubClient, pj kube.ProwJob, childDescription string) er
 			Context:	 pj.Spec.Context,
 			TargetURL:   pj.Status.URL,
 		}); err != nil {
-			return err
+			debug.PrintStack()
+			return fmt.Errorf("error creating status state: %s description: %s context: %s URL %s for %s/%s:%s : %v",
+				string(contextState),
+				description,
+				pj.Spec.Context,
+				pj.Status.URL,
+				refs.Org,
+				refs.Repo,
+				refs.Pulls[0].SHA,
+				err)
 		}
 	}
 
