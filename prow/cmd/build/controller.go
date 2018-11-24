@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"time"
 
@@ -164,6 +165,10 @@ func (c *controller) Run(threads int, stop <-chan struct{}) error {
 	}
 
 	logrus.Info("Started workers")
+	err := ioutil.WriteFile("/tmp/started", nil, 0644)
+	if err != nil {
+		return err
+	}
 	<-stop
 	logrus.Info("Shutting down workers")
 	return nil
