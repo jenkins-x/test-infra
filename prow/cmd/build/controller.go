@@ -269,6 +269,15 @@ func (c *controller) now() metav1.Time {
 func (c *controller) buildID(pj prowjobv1.ProwJob) (string, error) {
 	// todo not sure how to sort this out yet, but this is now Jenkins X specific
 	branch := downwardapi.GetBranch(downwardapi.NewJobSpec(pj.Spec, "", pj.Name))
+	if pj.Spec.Refs == nil {
+		return "", fmt.Errorf("no spec refs")
+	}
+	if pj.Spec.Refs.Org == ""{
+		return "", fmt.Errorf("spec refs org is empty")
+	}
+	if pj.Spec.Refs.Repo == "" {
+		return "", fmt.Errorf("spec refs repo is empty")
+	}
 	jobName := strings.ToLower(fmt.Sprintf("%s/%s/%s", pj.Spec.Refs.Org, pj.Spec.Refs.Repo, branch))
 	return pjutil.GetBuildID(jobName, c.totURL)
 }
