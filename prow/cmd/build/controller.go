@@ -526,13 +526,27 @@ func defaultEnv(c *untypedcorev1.Container, rawEnv map[string]string) {
 	}
 }
 
+// defaultArguments will append each arg to the template, except where the argument name is already defined.
+func defaultTemplateenv(t *buildv1alpha1.TemplateInstantiationSpec, rawEnv map[string]string) {
+	keys := sets.String{}
+	for _, arg := range t.Env {
+		keys.Insert(arg.Name)
+	}
+	for k, v := range rawEnv {
+		if keys.Has(k) {
+			continue
+		}
+		t.Env = append(t.Env, untypedcorev1.EnvVar{Name: k, Value: v})
+	}
+}
+
 // injectEnvironment will add rawEnv to the build steps and/or template arguments.
 func injectEnvironment(b *buildv1alpha1.Build, rawEnv map[string]string) {
 	for i := range b.Spec.Steps { // Inject environment variables to each step
 		defaultEnv(&b.Spec.Steps[i], rawEnv)
 	}
-	if b.Spec.Template != nil { // Also add it as template arguments
-		defaultArguments(b.Spec.Template, rawEnv)
+	if b.Spec.Template != nil { // Also add environment variables to templates
+		defaultTemplateenv(b.Spec.Template, rawEnv)
 	}
 }
 
@@ -552,7 +566,24 @@ func injectSource(b *buildv1alpha1.Build, pj prowjobv1.ProwJob) error {
 	if err != nil {
 		return fmt.Errorf("clone source error: %v", err)
 	}
-	if srcContainer == nil {
+	if srcContainer == nil && pj.Spec.Refs != nil {
+		// lets fall back to vanilla knative source step
+		// lets also clean this up
+		sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
+		var revision string
+		if len(pj.Spec.Refs.Pulls) > 0 {
+			revision = pj.Spec.Refs.Pulls[0].SHA
+		} else {
+			revision = pj.Spec.Refs.BaseSHA
+		}
+		b.Spec.Source = &buildv1alpha1.SourceSpec{
+			Git: &buildv1alpha1.GitSourceSpec{
+				Url:      sourceURL,
+				Revision: revision,
+			},
+		}
+		return nil
+	} else if srcContainer == nil {
 		return nil
 	} else {
 		srcContainer.Name = "" // knative-build requirement
