@@ -317,7 +317,9 @@ func reconcile(c reconciler, key string) error {
 		runtime.HandleError(err)
 		return nil
 	}
-
+	// JR not sure what to do.  context is 'serverless-jenkins' but the default context in c.builds is '' see https://github.com/kubernetes/test-infra/blob/6d46fd1/prow/cmd/build/main.go#L99-L100
+	// so for now let's use the default context
+	ctx = *new(string)
 	var wantBuild bool
 
 	pj, err := c.getProwJob(name)
