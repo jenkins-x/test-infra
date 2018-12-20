@@ -626,6 +626,21 @@ func injectSource(b *buildv1alpha1.Build, pj prowjobv1.ProwJob) error {
 	return nil
 }
 
+// injectTimeout configures the timeout on the buildspec
+func injectTimeout(b *buildv1alpha1.Build, pj prowjobv1.ProwJob) error {
+	if pj.Spec.DecorationConfig == nil {
+		// TODO should get this from configuration somewhere
+		b.Spec.Timeout = &metav1.Duration{Duration: time.Hour}
+	} else if pj.Spec.DecorationConfig.Timeout == 0 {
+		// TODO should get this from configuration somewhere
+		b.Spec.Timeout = &metav1.Duration{Duration: time.Hour}
+	} else {
+		b.Spec.Timeout = &metav1.Duration{Duration:pj.Spec.DecorationConfig.Timeout}
+	}
+
+	return nil
+}
+
 // makeBuild creates a build from the prowjob, using the prowjob's buildspec.
 func makeBuild(pj prowjobv1.ProwJob, buildID string) (*buildv1alpha1.Build, error) {
 	if pj.Spec.BuildSpec == nil {
@@ -641,6 +656,14 @@ func makeBuild(pj prowjobv1.ProwJob, buildID string) (*buildv1alpha1.Build, erro
 	}
 	injectEnvironment(&b, rawEnv)
 	err = injectSource(&b, pj)
+	if err != nil {
+		return nil, fmt.Errorf("source error: %v", err)
+	}
+
+	err = injectTimeout(&b, pj)
+	if err != nil {
+		return nil, fmt.Errorf("timeout error: %v", err)
+	}
 
 	return &b, nil
 }
