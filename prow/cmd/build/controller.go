@@ -299,7 +299,20 @@ func (c *controller) now() metav1.Time {
 }
 
 func (c *controller) buildID(pj prowjobv1.ProwJob) (string, error) {
-	return pjutil.GetBuildID(pj.Spec.Job, c.totURL)
+	// todo not sure how to sort this out yet, but this is now Jenkins X specific
+	branch := downwardapi.GetBranch(downwardapi.NewJobSpec(pj.Spec, "", pj.Name))
+	if pj.Spec.Refs == nil {
+		return "", fmt.Errorf("no spec refs")
+	}
+	if pj.Spec.Refs.Org == "" {
+		return "", fmt.Errorf("spec refs org is empty")
+	}
+	if pj.Spec.Refs.Repo == "" {
+		return "", fmt.Errorf("spec refs repo is empty")
+	}
+	jobName := strings.ToLower(fmt.Sprintf("%s/%s/%s", pj.Spec.Refs.Org, pj.Spec.Refs.Repo, branch))
+	logrus.Infof("get build id for jobname: %s, from URL %s", jobName, c.totURL)
+	return pjutil.GetBuildID(jobName, c.totURL)
 }
 
 var (
@@ -330,9 +343,10 @@ func reconcile(c reconciler, key string) error {
 		return fmt.Errorf("get prowjob: %v", err)
 	case pj.Spec.Agent != prowjobv1.KnativeBuildAgent:
 		// Do not want a build for this job
-	case pj.Spec.Cluster != ctx:
-		// Build is in wrong cluster, we do not want this build
-		logrus.Warnf("%s found in context %s not %s", key, ctx, pj.Spec.Cluster)
+	//case pj.Spec.Cluster != ctx:
+	// need to disable this check as having issues when default current context is empty
+	// Build is in wrong cluster, we do not want this build
+	//logrus.Warnf("%s found in context %s not %s", key, ctx, pj.Spec.Cluster)
 	case pj.DeletionTimestamp == nil:
 		wantBuild = true
 	}
