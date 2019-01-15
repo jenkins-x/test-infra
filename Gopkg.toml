@@ -73,6 +73,11 @@ required = [
   name = "k8s.io/client-go"
   version = "v9.0.0"
 
+[[override]]
+  name = "github.com/knative/build-pipeline"
+  branch = "dep-constraints"
+  source = "https://github.com/rawlingsj/build-pipeline.git"
+
 [[constraint]]
   name = "github.com/docker/docker"
   # https://github.com/docker/docker-ce/blob/17.12/components/cli/vendor.conf

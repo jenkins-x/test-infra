@@ -25,8 +25,6 @@ type Interface interface {
 	Builds() BuildInformer
 	// BuildTemplates returns a BuildTemplateInformer.
 	BuildTemplates() BuildTemplateInformer
-	// ClusterBuildTemplates returns a ClusterBuildTemplateInformer.
-	ClusterBuildTemplates() ClusterBuildTemplateInformer
 }
 
 type version struct {
@@ -48,9 +46,4 @@ func (v *version) Builds() BuildInformer {
 // BuildTemplates returns a BuildTemplateInformer.
 func (v *version) BuildTemplates() BuildTemplateInformer {
 	return &buildTemplateInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// ClusterBuildTemplates returns a ClusterBuildTemplateInformer.
-func (v *version) ClusterBuildTemplates() ClusterBuildTemplateInformer {
-	return &clusterBuildTemplateInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

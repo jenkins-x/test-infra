@@ -26,7 +26,6 @@ type BuildV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	BuildsGetter
 	BuildTemplatesGetter
-	ClusterBuildTemplatesGetter
 }
 
 // BuildV1alpha1Client is used to interact with features provided by the build.knative.dev group.
@@ -40,10 +39,6 @@ func (c *BuildV1alpha1Client) Builds(namespace string) BuildInterface {
 
 func (c *BuildV1alpha1Client) BuildTemplates(namespace string) BuildTemplateInterface {
 	return newBuildTemplates(c, namespace)
-}
-
-func (c *BuildV1alpha1Client) ClusterBuildTemplates() ClusterBuildTemplateInterface {
-	return newClusterBuildTemplates(c)
 }
 
 // NewForConfig creates a new BuildV1alpha1Client for the given config.

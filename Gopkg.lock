@@ -447,6 +447,14 @@
   revision = "7ebe0a500653eeb1859664bed5e48dec1e164e73"
 
 [[projects]]
+  digest = "1:373397317168dd5ac00efda13940668f1947fd641f572b9cf386a86a99c63ca9"
+  name = "github.com/gobuffalo/envy"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "801d7253ade1f895f74596b9a96147ed2d3b087e"
+  version = "v1.6.11"
+
+[[projects]]
   digest = "1:df9b7520ad8d666674d89373b1eccf1c75fe450128bf5e436d9f37da562ad459"
   name = "github.com/gogo/protobuf"
   packages = [
@@ -764,6 +772,14 @@
   revision = "0b12d6b5"
 
 [[projects]]
+  digest = "1:da62aa6632d04e080b8a8b85a59ed9ed1550842a0099a55f3ae3a20d02a3745a"
+  name = "github.com/joho/godotenv"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "23d116af351c84513e1946b527c88823e476be13"
+  version = "v1.3.0"
+
+[[projects]]
   branch = "master"
   digest = "1:b9303d3e6be90434c29e11788dc5dec6ee39a7349f0ee9588b9b535b612adf46"
   name = "github.com/joshdk/go-junit"
@@ -790,7 +806,7 @@
   revision = "6025e8de665b31fa74ab1a66f2cddd8c0abf887e"
 
 [[projects]]
-  digest = "1:84745e51bea6dad51559c51eed3402d11329a4e05d390438fb49036effa85975"
+  digest = "1:bb059a05de6bdc4b66b73e6d7434fd2ad54e7ad8f943f32f2574bc3d274a57b4"
   name = "github.com/knative/build"
   packages = [
     "pkg/apis/build",
@@ -805,18 +821,40 @@
     "pkg/client/listers/build/v1alpha1",
   ]
   pruneopts = "NUT"
-  revision = "94859753e2c6724df2be86f6a254f810895fa3eb"
-  version = "v0.2.0"
+  revision = "master"
+
+[[projects]]
+  branch = "dep-constraints"
+  digest = "1:34918d78503efe8bfb113af771247749a9f9b9cfa471f384952f638f4d4cedb8"
+  name = "github.com/knative/build-pipeline"
+  packages = [
+    "pkg/apis/pipeline",
+    "pkg/apis/pipeline/v1alpha1",
+    "pkg/client/clientset/versioned",
+    "pkg/client/clientset/versioned/scheme",
+    "pkg/client/clientset/versioned/typed/pipeline/v1alpha1",
+    "pkg/client/informers/externalversions",
+    "pkg/client/informers/externalversions/internalinterfaces",
+    "pkg/client/informers/externalversions/pipeline",
+    "pkg/client/informers/externalversions/pipeline/v1alpha1",
+    "pkg/client/listers/pipeline/v1alpha1",
+  ]
+  pruneopts = "NUT"
+  revision = "bd57805d4046188be50a83bdec1ef97e2159a3d1"
+  source = "https://github.com/rawlingsj/build-pipeline.git"
 
 [[projects]]
   branch = "master"
-  digest = "1:f7da9e46e110b889a0075675c14935b3e8d86bdb7ddf83c98c22125f8c54f759"
+  digest = "1:20d04a648ff1eff6fde896567617c3763b9cd0b4d9af3c32018cb15cea4aa7a7"
   name = "github.com/knative/pkg"
   packages = [
     "apis",
     "apis/duck",
     "apis/duck/v1alpha1",
-    "kmeta",
+    "changeset",
+    "logging",
+    "logging/logkey",
+    "webhook",
   ]
   pruneopts = "NUT"
   revision = "0e41760cea1d1ce16f4cc311c2d6bd3525bb3da7"
@@ -832,6 +870,14 @@
   ]
   pruneopts = "NUT"
   revision = "32fa128f234d041f196a9f3e0fea5ac9772c08e1"
+
+[[projects]]
+  digest = "1:56dbf15e091bf7926cb33a57cb6bdfc658fc6d3498d2f76f10a97ce7856f1fde"
+  name = "github.com/markbates/inflect"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "24b83195037b3bc61fcda2d28b7b0518bce293b6"
+  version = "v1.0.4"
 
 [[projects]]
   branch = "master"
@@ -985,6 +1031,18 @@
   revision = "454a56f35412459b5e684fd5ec0f9211b94f002a"
 
 [[projects]]
+  digest = "1:efafa5160b1666d27e6e1ad4cd3fba27ce73aaaa1e99c3d02e14e55690a8878d"
+  name = "github.com/rogpeppe/go-internal"
+  packages = [
+    "modfile",
+    "module",
+    "semver",
+  ]
+  pruneopts = "NUT"
+  revision = "d87f08a7d80821c797ffc8eb8f4e01675f378736"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:54f275b550b8a8a20bc91e2067ed740600b69dae9dcf9cdfe905bac1b9cfd1d0"
   name = "github.com/satori/go.uuid"
   packages = ["."]
@@ -1066,6 +1124,37 @@
   pruneopts = "NUT"
   revision = "6edeb78af2d9e4f169abb223feaef35da2e45d06"
   version = "v0.13.0"
+
+[[projects]]
+  digest = "1:22f696cee54865fb8e9ff91df7b633f6b8f22037a8015253c6b6a71ca82219c7"
+  name = "go.uber.org/atomic"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "1ea20fb1cbb1cc08cbd0d913a96dead89aa18289"
+  version = "v1.3.2"
+
+[[projects]]
+  digest = "1:58ca93bdf81bac106ded02226b5395a0595d5346cdc4caa8d9c1f3a5f8f9976e"
+  name = "go.uber.org/multierr"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "3c4937480c32f4c13a875a1829af76c98ca3d40a"
+  version = "v1.1.0"
+
+[[projects]]
+  digest = "1:85674ac609b704fd4e9f463553b6ffc3a3527a993ae0ba550eb56beaabdfe094"
+  name = "go.uber.org/zap"
+  packages = [
+    ".",
+    "buffer",
+    "internal/bufferpool",
+    "internal/color",
+    "internal/exit",
+    "zapcore",
+  ]
+  pruneopts = "NUT"
+  revision = "ff33455a0e382e8a81d14dd7c922020b6b5e7982"
+  version = "v1.9.1"
 
 [[projects]]
   digest = "1:14263791cdd53e1379d8363b21fe97145665737a81b73076901d204a26ab6b99"
@@ -1653,6 +1742,10 @@
     "github.com/jinzhu/gorm/dialects/sqlite",
     "github.com/joshdk/go-junit",
     "github.com/jteeuwen/go-bindata/go-bindata",
+    "github.com/knative/build-pipeline/pkg/apis/pipeline/v1alpha1",
+    "github.com/knative/build-pipeline/pkg/client/clientset/versioned",
+    "github.com/knative/build-pipeline/pkg/client/informers/externalversions",
+    "github.com/knative/build-pipeline/pkg/client/informers/externalversions/pipeline/v1alpha1",
     "github.com/knative/build/pkg/apis/build/v1alpha1",
     "github.com/knative/build/pkg/client/clientset/versioned",
     "github.com/knative/build/pkg/client/informers/externalversions",
