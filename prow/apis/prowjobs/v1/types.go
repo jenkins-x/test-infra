@@ -71,6 +71,8 @@ const (
 	JenkinsAgent = "jenkins"
 	// KnativeBuildAgent means prow will schedule the job via a build-crd resource.
 	KnativeBuildAgent = "knative-build"
+	// KnativePipelineAgent means prow will schedule the job via a pipeline-crd resource.
+	KnativePipelineAgent = "knative-pipeline"
 )
 
 const (
