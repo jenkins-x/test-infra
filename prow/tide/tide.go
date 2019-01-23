@@ -720,6 +720,8 @@ func prNumbers(prs []PullRequest) []int {
 }
 
 func (c *Controller) pickBatch(sp subpool, cc contextChecker) ([]PullRequest, error) {
+	sp.log.Warn("batch testing not yet supported with Tide and Knative build")
+	return nil, nil
 	// we must choose the oldest PRs for the batch
 	sort.Slice(sp.prs, func(i, j int) bool { return sp.prs[i].Number < sp.prs[j].Number })
 
