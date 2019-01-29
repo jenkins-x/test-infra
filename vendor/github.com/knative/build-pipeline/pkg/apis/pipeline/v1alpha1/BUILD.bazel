@@ -36,6 +36,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//vendor/github.com/knative/build-pipeline/pkg/apis/pipeline:go_default_library",
+        "//vendor/github.com/knative/build-pipeline/pkg/reconciler/v1alpha1/taskrun/list:go_default_library",
         "//vendor/github.com/knative/build/pkg/apis/build/v1alpha1:go_default_library",
         "//vendor/github.com/knative/pkg/apis:go_default_library",
         "//vendor/github.com/knative/pkg/apis/duck/v1alpha1:go_default_library",

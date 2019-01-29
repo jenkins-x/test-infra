@@ -970,8 +970,9 @@ func validateLabels(labels map[string]string) error {
 func validateAgent(v JobBase, podNamespace string) error {
 	k := string(prowjobv1.KubernetesAgent)
 	b := string(prowjobv1.KnativeBuildAgent)
+	p := string(prowjobv1.KnativePipelineRunAgent)
 	j := string(prowjobv1.JenkinsAgent)
-	agents := sets.NewString(k, b, j)
+	agents := sets.NewString(k, b, j, p)
 	agent := v.Agent
 	switch {
 	case !agents.Has(agent):
@@ -984,6 +985,8 @@ func validateAgent(v JobBase, podNamespace string) error {
 		return fmt.Errorf("job build_specs require agent: %s (found %q)", b, agent)
 	case agent == b && v.BuildSpec == nil:
 		return errors.New("knative-build jobs require a build_spec")
+	case agent == p && v.PipelineRunSpec == nil:
+		return errors.New("knative-pipeline-run jobs require a pipeline_run_spec")
 	case v.DecorationConfig != nil && agent != k && agent != b:
 		// TODO(fejta): only source decoration supported...
 		return fmt.Errorf("decoration requires agent: %s or %s (found %q)", k, b, agent)

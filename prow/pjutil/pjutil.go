@@ -156,6 +156,7 @@ func specFromJobBase(jb config.JobBase) kube.ProwJobSpec {
 
 		PodSpec:   jb.Spec,
 		BuildSpec: jb.BuildSpec,
+		PipelineRunSpec: jb.PipelineRunSpec,
 	}
 }
 

@@ -806,7 +806,7 @@
   revision = "6025e8de665b31fa74ab1a66f2cddd8c0abf887e"
 
 [[projects]]
-  digest = "1:bb059a05de6bdc4b66b73e6d7434fd2ad54e7ad8f943f32f2574bc3d274a57b4"
+  digest = "1:8b5c0beb769cfda9540d384b00feed24f1ac097906d6d2c002aacb864d7da3bc"
   name = "github.com/knative/build"
   packages = [
     "pkg/apis/build",
@@ -821,11 +821,11 @@
     "pkg/client/listers/build/v1alpha1",
   ]
   pruneopts = "NUT"
-  revision = "master"
+  revision = "v0.3.0"
 
 [[projects]]
-  branch = "dep-constraints"
-  digest = "1:34918d78503efe8bfb113af771247749a9f9b9cfa471f384952f638f4d4cedb8"
+  branch = "master"
+  digest = "1:d0414ca6bc02f0ab926970fd143dbcf2b02ab4d2e1a4839c8d05b6f9122e9484"
   name = "github.com/knative/build-pipeline"
   packages = [
     "pkg/apis/pipeline",
@@ -838,20 +838,21 @@
     "pkg/client/informers/externalversions/pipeline",
     "pkg/client/informers/externalversions/pipeline/v1alpha1",
     "pkg/client/listers/pipeline/v1alpha1",
+    "pkg/reconciler/v1alpha1/taskrun/list",
   ]
   pruneopts = "NUT"
-  revision = "bd57805d4046188be50a83bdec1ef97e2159a3d1"
-  source = "https://github.com/rawlingsj/build-pipeline.git"
+  revision = "8183ecdb0ccc50c2664ec38b842991dfd295133b"
 
 [[projects]]
   branch = "master"
-  digest = "1:20d04a648ff1eff6fde896567617c3763b9cd0b4d9af3c32018cb15cea4aa7a7"
+  digest = "1:9419c33316b54b30e7670ae08401ad5644a1854955575894ef4ca5b24d7ed9d9"
   name = "github.com/knative/pkg"
   packages = [
     "apis",
     "apis/duck",
     "apis/duck/v1alpha1",
     "changeset",
+    "kmeta",
     "logging",
     "logging/logkey",
     "webhook",

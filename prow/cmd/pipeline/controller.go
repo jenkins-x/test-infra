@@ -29,7 +29,6 @@ import (
 	prowjoblisters "k8s.io/test-infra/prow/client/listers/prowjobs/v1"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pjutil"
-	"k8s.io/test-infra/prow/pod-utils/clone"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
@@ -244,7 +243,7 @@ func (c *controller) enqueueKey(ctx string, obj interface{}) {
 	switch o := obj.(type) {
 	case *prowjobv1.ProwJob:
 		c.workqueue.AddRateLimited(toKey(ctx, o.Spec.Namespace, o.Name))
-	case *pipelinev1alpha1.Pipeline:
+	case *pipelinev1alpha1.PipelineRun:
 		c.workqueue.AddRateLimited(toKey(ctx, o.Namespace, o.Name))
 	default:
 		logrus.Warnf("cannot enqueue unknown type %T: %v", o, obj)
@@ -254,9 +253,9 @@ func (c *controller) enqueueKey(ctx string, obj interface{}) {
 
 type reconciler interface {
 	getProwJob(name string) (*prowjobv1.ProwJob, error)
-	getPipeline(context, namespace, name string) (*pipelinev1alpha1.Pipeline, error)
-	deletePipeline(context, namespace, name string) error
-	createPipeline(context, namespace string, b *pipelinev1alpha1.Pipeline) (*pipelinev1alpha1.Pipeline, error)
+	getPipelineRun(context, namespace, name string) (*pipelinev1alpha1.PipelineRun, error)
+	deletePipelineRun(context, namespace, name string) error
+	createPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) (*pipelinev1alpha1.PipelineRun, error)
 	updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, error)
 	now() metav1.Time
 	pipelineID(prowjobv1.ProwJob) (string, error)
@@ -271,35 +270,48 @@ func (c *controller) updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, e
 	return c.pjc.ProwV1().ProwJobs(c.pjNamespace).Update(pj)
 }
 
-func (c *controller) getPipeline(context, namespace, name string) (*pipelinev1alpha1.Pipeline, error) {
+func (c *controller) getPipelineRun(context, namespace, name string) (*pipelinev1alpha1.PipelineRun, error) {
 	b, ok := c.pipelines[context]
 	if !ok {
 		return nil, errors.New("context not found")
 	}
-	return b.informer.Lister().Pipelines(namespace).Get(name)
+	return b.informer.Lister().PipelineRuns(namespace).Get(name)
 }
-func (c *controller) deletePipeline(context, namespace, name string) error {
+func (c *controller) deletePipelineRun(context, namespace, name string) error {
 	logrus.Debugf("deletePipeline(%s,%s,%s)", context, namespace, name)
 	b, ok := c.pipelines[context]
 	if !ok {
 		return errors.New("context not found")
 	}
-	return b.client.PipelineV1alpha1().Pipelines(namespace).Delete(name, &metav1.DeleteOptions{})
+	return b.client.PipelineV1alpha1().PipelineRuns(namespace).Delete(name, &metav1.DeleteOptions{})
 }
-func (c *controller) createPipeline(context, namespace string, b *pipelinev1alpha1.Pipeline) (*pipelinev1alpha1.Pipeline, error) {
-	logrus.Debugf("createPipeline(%s,%s,%s)", context, namespace, b.Name)
+func (c *controller) createPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) (*pipelinev1alpha1.PipelineRun, error) {
+	logrus.Debugf("createPipelineRun(%s,%s,%s)", context, namespace, b.Name)
 	bc, ok := c.pipelines[context]
 	if !ok {
 		return nil, errors.New("context not found")
 	}
-	return bc.client.PipelineV1alpha1().Pipelines(namespace).Create(b)
+	return bc.client.PipelineV1alpha1().PipelineRuns(namespace).Create(b)
 }
 func (c *controller) now() metav1.Time {
 	return metav1.Now()
 }
 
 func (c *controller) pipelineID(pj prowjobv1.ProwJob) (string, error) {
-	return pjutil.GetBuildID(pj.Spec.Job, c.totURL)
+	// todo not sure how to sort this out yet, but this is now Jenkins X specific
+	branch := downwardapi.GetBranch(downwardapi.NewJobSpec(pj.Spec, "", pj.Name))
+	if pj.Spec.Refs == nil {
+		return "", fmt.Errorf("no spec refs")
+	}
+	if pj.Spec.Refs.Org == "" {
+		return "", fmt.Errorf("spec refs org is empty")
+	}
+	if pj.Spec.Refs.Repo == "" {
+		return "", fmt.Errorf("spec refs repo is empty")
+	}
+	jobName := strings.ToLower(fmt.Sprintf("%s/%s/%s", pj.Spec.Refs.Org, pj.Spec.Refs.Repo, branch))
+	logrus.Infof("get build id for jobname: %s, from URL %s", jobName, c.totURL)
+	return pjutil.GetBuildID(jobName, c.totURL)
 }
 
 var (
@@ -318,7 +330,9 @@ func reconcile(c reconciler, key string) error {
 		return nil
 	}
 
-	var wantPipeline bool
+	// todo JR - need to nil out contexts to run on Jenkins X as default context is the same
+	ctx = *new(string)
+	var wantPipelineRun bool
 
 	pj, err := c.getProwJob(name)
 	switch {
@@ -326,61 +340,63 @@ func reconcile(c reconciler, key string) error {
 		// Do not want pipeline
 	case err != nil:
 		return fmt.Errorf("get prowjob: %v", err)
-	case pj.Spec.Agent != prowjobv1.KnativePipelineAgent:
+	case pj.Spec.Agent != prowjobv1.KnativePipelineRunAgent:
 		// Do not want a pipeline for this job
-	case pj.Spec.Cluster != ctx:
-		// Pipeline is in wrong cluster, we do not want this pipeline
-		logrus.Warnf("%s found in context %s not %s", key, ctx, pj.Spec.Cluster)
+
+		//todo JR we need to comment this out when run with Jenkins X
+	//case pj.Spec.Cluster != ctx:
+	//	// Pipeline is in wrong cluster, we do not want this pipeline
+	//	logrus.Warnf("%s found in context %s not %s", key, ctx, pj.Spec.Cluster)
 	case pj.DeletionTimestamp == nil:
-		wantPipeline = true
+		wantPipelineRun = true
 	}
 
 	var havePipeline bool
 
 	// TODO(fejta): make trigger set the expected Namespace for the pod/pipeline.
-	b, err := c.getPipeline(ctx, namespace, name)
+	p, err := c.getPipelineRun(ctx, namespace, name)
 	switch {
 	case apierrors.IsNotFound(err):
 		// Do not have a pipeline
 	case err != nil:
 		return fmt.Errorf("get pipeline %s: %v", key, err)
-	case b.DeletionTimestamp == nil:
+	case p.DeletionTimestamp == nil:
 		havePipeline = true
 	}
 
 	// Should we create or delete this pipeline?
 	switch {
-	case !wantPipeline:
+	case !wantPipelineRun:
 		if !havePipeline {
-			if pj != nil && pj.Spec.Agent == prowjobv1.KnativePipelineAgent {
+			if pj != nil && pj.Spec.Agent == prowjobv1.KnativePipelineRunAgent {
 				logrus.Infof("Observed deleted %s", key)
 			}
 			return nil
 		}
-		switch v, ok := b.Labels[kube.CreatedByProw]; {
+		switch v, ok := p.Labels[kube.CreatedByProw]; {
 		case !ok, v != "true": // Not controlled by this
 			return nil
 		}
 		logrus.Infof("Delete pipelines/%s", key)
-		if err = c.deletePipeline(ctx, namespace, name); err != nil {
+		if err = c.deletePipelineRun(ctx, namespace, name); err != nil {
 			return fmt.Errorf("delete pipeline: %v", err)
 		}
 		return nil
 	case finalState(pj.Status.State):
 		logrus.Infof("Observed finished %s", key)
 		return nil
-	case wantPipeline && pj.Spec.PipelineSpec == nil:
-		return errors.New("nil PipelineSpec")
-	case wantPipeline && !havePipeline:
+	case wantPipelineRun && pj.Spec.PipelineRunSpec == nil:
+		return errors.New("nil PipelineRunSpec")
+	case wantPipelineRun && !havePipeline:
 		id, err := c.pipelineID(*pj)
 		if err != nil {
 			return fmt.Errorf("failed to get pipeline id: %v", err)
 		}
-		if b, err = makePipeline(*pj, id); err != nil {
+		if p, err = makePipelineRun(*pj, id); err != nil {
 			return fmt.Errorf("make pipeline: %v", err)
 		}
 		logrus.Infof("Create pipelines/%s", key)
-		if b, err = c.createPipeline(ctx, namespace, b); err != nil {
+		if p, err = c.createPipelineRun(ctx, namespace, p); err != nil {
 			return fmt.Errorf("create pipeline: %v", err)
 		}
 	}
@@ -388,7 +404,7 @@ func reconcile(c reconciler, key string) error {
 	// Ensure prowjob status is correct
 	haveState := pj.Status.State
 	haveMsg := pj.Status.Description
-	wantState, wantMsg := prowJobStatus(b.Status)
+	wantState, wantMsg := prowJobStatus(p.Status)
 	if haveState != wantState || haveMsg != wantMsg {
 		npj := pj.DeepCopy()
 		if npj.Status.StartTime.IsZero() {
@@ -439,14 +455,9 @@ const (
 )
 
 // prowJobStatus returns the desired state and description based on the pipeline status.
-func prowJobStatus(bs pipelinev1alpha1.PipelineStatus) (prowjobv1.ProwJobState, string) {
-	started := bs.StartTime
-	finished := bs.CompletionTime
-	pcond := bs.GetCondition(pipelinev1alpha1.PipelineSucceeded)
+func prowJobStatus(ps pipelinev1alpha1.PipelineRunStatus) (prowjobv1.ProwJobState, string) {
+	pcond := ps.GetCondition(duckv1alpha1.ConditionSucceeded)
 	if pcond == nil {
-		if !finished.IsZero() {
-			return prowjobv1.ErrorState, descMissingCondition
-		}
 		return prowjobv1.TriggeredState, descScheduling
 	}
 	cond := *pcond
@@ -455,33 +466,12 @@ func prowJobStatus(bs pipelinev1alpha1.PipelineStatus) (prowjobv1.ProwJobState, 
 		return prowjobv1.SuccessState, description(cond, descSucceeded)
 	case cond.Status == untypedcorev1.ConditionFalse:
 		return prowjobv1.FailureState, description(cond, descFailed)
-	case started.IsZero():
-		return prowjobv1.TriggeredState, description(cond, descInitializing)
-	case cond.Status == untypedcorev1.ConditionUnknown, finished.IsZero():
+	case cond.Status == untypedcorev1.ConditionUnknown:
 		return prowjobv1.PendingState, description(cond, descRunning)
 	}
 	logrus.Warnf("Unknown condition %#v", cond)
 	return prowjobv1.ErrorState, description(cond, descUnknown) // shouldn't happen
 }
-
-// TODO(fejta): knative/pipeline convert package should export "workspace", "home", "/workspace"
-// https://github.com/knative/pipeline/blob/17e8cf8417e1ef3d29bd465d4f45ad19dd3a3f2c/pkg/pipelineer/cluster/convert/convert.go#L39-L65
-const (
-	workspaceMountName = "workspace"
-	homeMountName      = "home"
-	workspaceMountPath = "/workspace"
-)
-
-var (
-	codeMount = untypedcorev1.VolumeMount{
-		Name:      workspaceMountName,
-		MountPath: "/code-mount", // should be irrelevant
-	}
-	logMount = untypedcorev1.VolumeMount{
-		Name:      homeMountName,
-		MountPath: "/var/prow-pipeline-log", // should be irrelevant
-	}
-)
 
 func pipelineMeta(pj prowjobv1.ProwJob) metav1.ObjectMeta {
 	podLabels, annotations := decorate.LabelsAndAnnotationsForJob(pj)
@@ -498,19 +488,6 @@ func pipelineEnv(pj prowjobv1.ProwJob, pipelineID string) (map[string]string, er
 	return downwardapi.EnvForSpec(downwardapi.NewJobSpec(pj.Spec, pipelineID, pj.Name))
 }
 
-// defaultArguments will append each arg to the template, except where the argument name is already defined.
-func defaultArguments(t *pipelinev1alpha1.TemplateInstantiationSpec, rawEnv map[string]string) {
-	keys := sets.String{}
-	for _, arg := range t.Arguments {
-		keys.Insert(arg.Name)
-	}
-	for k, v := range rawEnv {
-		if keys.Has(k) {
-			continue
-		}
-		t.Arguments = append(t.Arguments, pipelinev1alpha1.ArgumentSpec{Name: k, Value: v})
-	}
-}
 
 // defaultEnv adds the map of environment variables to the container, except keys already defined.
 func defaultEnv(c *untypedcorev1.Container, rawEnv map[string]string) {
@@ -526,74 +503,22 @@ func defaultEnv(c *untypedcorev1.Container, rawEnv map[string]string) {
 	}
 }
 
-// injectEnvironment will add rawEnv to the pipeline steps and/or template arguments.
-func injectEnvironment(b *pipelinev1alpha1.Pipeline, rawEnv map[string]string) {
-	for i := range b.Spec.Steps { // Inject environment variables to each step
-		defaultEnv(&b.Spec.Steps[i], rawEnv)
-	}
-	if b.Spec.Template != nil { // Also add it as template arguments
-		defaultArguments(b.Spec.Template, rawEnv)
-	}
-}
-
-func workDir(refs prowjobv1.Refs) pipelinev1alpha1.ArgumentSpec {
-	// workspaceMountName is auto-injected into each step at workspaceMountPath
-	return pipelinev1alpha1.ArgumentSpec{Name: "WORKDIR", Value: clone.PathForRefs(workspaceMountPath, refs)}
-}
-
-// injectSource adds the custom source container to call clonerefs correctly.
-//
-// Does nothing if the pipeline spec predefines Source
-func injectSource(b *pipelinev1alpha1.Pipeline, pj prowjobv1.ProwJob) error {
-	if b.Spec.Source != nil {
-		return nil
-	}
-	srcContainer, refs, cloneVolumes, err := decorate.CloneRefs(pj, codeMount, logMount)
-	if err != nil {
-		return fmt.Errorf("clone source error: %v", err)
-	}
-	if srcContainer == nil {
-		return nil
-	} else {
-		srcContainer.Name = "" // knative-pipeline requirement
-	}
-
-	b.Spec.Source = &pipelinev1alpha1.SourceSpec{
-		Custom: srcContainer,
-	}
-	b.Spec.Volumes = append(b.Spec.Volumes, cloneVolumes...)
-
-	wd := workDir(refs[0])
-	// Inject correct working directory
-	for i := range b.Spec.Steps {
-		if b.Spec.Steps[i].WorkingDir != "" {
-			continue
-		}
-		b.Spec.Steps[i].WorkingDir = wd.Value
-	}
-	if b.Spec.Template != nil {
-		// Best we can do for a template is to set WORKDIR
-		b.Spec.Template.Arguments = append(b.Spec.Template.Arguments, wd)
-	}
-
-	return nil
-}
-
 // makePipeline creates a pipeline from the prowjob, using the prowjob's pipelinespec.
-func makePipeline(pj prowjobv1.ProwJob, pipelineID string) (*pipelinev1alpha1.Pipeline, error) {
-	if pj.Spec.PipelineSpec == nil {
+func makePipelineRun(pj prowjobv1.ProwJob, pipelineID string) (*pipelinev1alpha1.PipelineRun, error) {
+	if pj.Spec.PipelineRunSpec == nil {
 		return nil, errors.New("nil PipelineSpec")
 	}
-	b := pipelinev1alpha1.Pipeline{
+	p := pipelinev1alpha1.PipelineRun{
 		ObjectMeta: pipelineMeta(pj),
-		Spec:       *pj.Spec.PipelineSpec,
+		Spec:       *pj.Spec.PipelineRunSpec,
 	}
-	rawEnv, err := pipelineEnv(pj, pipelineID)
-	if err != nil {
-		return nil, fmt.Errorf("environment error: %v", err)
-	}
-	injectEnvironment(&b, rawEnv)
-	err = injectSource(&b, pj)
 
-	return &b, nil
+	// todo JR create a PipelineResource
+	//err = injectSource(&p, pj)
+
+	// todo JR add envars?
+	//injectEnvironment(&p, rawEnv)
+
+
+	return &p, nil
 }

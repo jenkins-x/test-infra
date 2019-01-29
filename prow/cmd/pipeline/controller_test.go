@@ -38,15 +38,15 @@ import (
 
 const (
 	errorGetProwJob    = "error-get-prowjob"
-	errorGetPipeline      = "error-get-pipeline"
-	errorDeletePipeline   = "error-delete-pipeline"
-	errorCreatePipeline   = "error-create-pipeline"
+	errorGetPipelineRun      = "error-get-pipeline"
+	errorDeletePipelineRun   = "error-delete-pipeline"
+	errorCreatePipelineRun   = "error-create-pipeline"
 	errorUpdateProwJob = "error-update-prowjob"
 )
 
 type fakeReconciler struct {
 	jobs   map[string]prowjobv1.ProwJob
-	pipelines map[string]pipelinev1alpha1.Pipeline
+	pipelines map[string]pipelinev1alpha1.PipelineRun
 	nows   metav1.Time
 }
 
@@ -85,34 +85,34 @@ func (r *fakeReconciler) updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJo
 	return pj, nil
 }
 
-func (r *fakeReconciler) getPipeline(context, namespace, name string) (*pipelinev1alpha1.Pipeline, error) {
-	if namespace == errorGetPipeline {
+func (r *fakeReconciler) getPipelineRun(context, namespace, name string) (*pipelinev1alpha1.PipelineRun, error) {
+	if namespace == errorGetPipelineRun {
 		return nil, errors.New("injected create pipeline error")
 	}
 	k := toKey(context, namespace, name)
 	b, present := r.pipelines[k]
 	if !present {
-		return nil, apierrors.NewNotFound(pipelinev1alpha1.Resource("Pipeline"), name)
+		return nil, apierrors.NewNotFound(pipelinev1alpha1.Resource("PipelineRun"), name)
 	}
 	return &b, nil
 }
-func (r *fakeReconciler) deletePipeline(context, namespace, name string) error {
-	if namespace == errorDeletePipeline {
+func (r *fakeReconciler) deletePipelineRun(context, namespace, name string) error {
+	if namespace == errorDeletePipelineRun {
 		return errors.New("injected create pipeline error")
 	}
 	k := toKey(context, namespace, name)
 	if _, present := r.pipelines[k]; !present {
-		return apierrors.NewNotFound(pipelinev1alpha1.Resource("Pipeline"), name)
+		return apierrors.NewNotFound(pipelinev1alpha1.Resource("PipelineRun"), name)
 	}
 	delete(r.pipelines, k)
 	return nil
 }
 
-func (r *fakeReconciler) createPipeline(context, namespace string, b *pipelinev1alpha1.Pipeline) (*pipelinev1alpha1.Pipeline, error) {
+func (r *fakeReconciler) createPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) (*pipelinev1alpha1.PipelineRun, error) {
 	if b == nil {
 		return nil, errors.New("nil pipeline")
 	}
-	if namespace == errorCreatePipeline {
+	if namespace == errorCreatePipelineRun {
 		return nil, errors.New("injected create pipeline error")
 	}
 	k := toKey(context, namespace, b.Name)
@@ -151,7 +151,7 @@ func TestEnqueueKey(t *testing.T) {
 		{
 			name:    "enqueue pipeline directly",
 			context: "hey",
-			obj: &pipelinev1alpha1.Pipeline{
+			obj: &pipelinev1alpha1.PipelineRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "foo",
 					Name:      "bar",
@@ -196,11 +196,11 @@ func TestEnqueueKey(t *testing.T) {
 
 func TestReconcile(t *testing.T) {
 	now := metav1.Now()
-	pipelineSpec := pipelinev1alpha1.PipelineSpec{}
-	noJobChange := func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.Pipeline) prowjobv1.ProwJob {
+	pipelineSpec := pipelinev1alpha1.PipelineRunSpec{}
+	noJobChange := func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 		return pj
 	}
-	noPipelineChange := func(_ prowjobv1.ProwJob, b pipelinev1alpha1.Pipeline) pipelinev1alpha1.Pipeline {
+	noPipelineRunChange := func(_ prowjobv1.ProwJob, b pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
 		return b
 	}
 	cases := []struct {
@@ -208,19 +208,19 @@ func TestReconcile(t *testing.T) {
 		namespace     string
 		context       string
 		observedJob   *prowjobv1.ProwJob
-		observedPipeline *pipelinev1alpha1.Pipeline
-		expectedJob   func(prowjobv1.ProwJob, pipelinev1alpha1.Pipeline) prowjobv1.ProwJob
-		expectedPipeline func(prowjobv1.ProwJob, pipelinev1alpha1.Pipeline) pipelinev1alpha1.Pipeline
+		observedPipelineRun *pipelinev1alpha1.PipelineRun
+		expectedJob   func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob
+		expectedPipelineRun func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun
 		err           bool
 	}{{
 		name: "new prow job creates pipeline",
 		observedJob: &prowjobv1.ProwJob{
 			Spec: prowjobv1.ProwJobSpec{
-				Agent:     prowjobv1.KnativePipelineAgent,
-				PipelineSpec: &pipelineSpec,
+				Agent:     prowjobv1.KnativePipelineRunAgent,
+				PipelineRunSpec: &pipelineSpec,
 			},
 		},
-		expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.Pipeline) prowjobv1.ProwJob {
+		expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 			pj.Status = prowjobv1.ProwJobStatus{
 				StartTime:   now,
 				State:       prowjobv1.TriggeredState,
@@ -228,9 +228,9 @@ func TestReconcile(t *testing.T) {
 			}
 			return pj
 		},
-		expectedPipeline: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.Pipeline) pipelinev1alpha1.Pipeline {
+		expectedPipelineRun: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
 			pj.Spec.Type = prowjobv1.PeriodicJob
-			b, err := makePipeline(pj, "50")
+			b, err := makePipelineRun(pj, "50")
 			if err != nil {
 				panic(err)
 			}
@@ -241,8 +241,8 @@ func TestReconcile(t *testing.T) {
 			name: "do not create pipeline for failed prowjob",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State: prowjobv1.FailureState,
@@ -254,8 +254,8 @@ func TestReconcile(t *testing.T) {
 			name: "do not create pipeline for successful prowjob",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State: prowjobv1.SuccessState,
@@ -267,8 +267,8 @@ func TestReconcile(t *testing.T) {
 			name: "do not create pipeline for aborted prowjob",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State: prowjobv1.AbortedState,
@@ -278,11 +278,11 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "delete pipeline after deleting prowjob",
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.PipelineSpec = &pipelinev1alpha1.PipelineSpec{}
-				b, err := makePipeline(pj, "7")
+				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
+				b, err := makePipelineRun(pj, "7")
 				if err != nil {
 					panic(err)
 				}
@@ -291,43 +291,43 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "do not delete deleted pipelines",
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.PipelineSpec = &pipelinev1alpha1.PipelineSpec{}
-				b, err := makePipeline(pj, "6")
+				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
+				b, err := makePipelineRun(pj, "6")
 				b.DeletionTimestamp = &now
 				if err != nil {
 					panic(err)
 				}
 				return b
 			}(),
-			expectedPipeline: noPipelineChange,
+			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
 			name: "only delete pipelines created by controller",
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.PipelineSpec = &pipelinev1alpha1.PipelineSpec{}
-				b, err := makePipeline(pj, "9999")
+				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
+				b, err := makePipelineRun(pj, "9999")
 				if err != nil {
 					panic(err)
 				}
 				delete(b.Labels, kube.CreatedByProw)
 				return b
 			}(),
-			expectedPipeline: noPipelineChange,
+			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
 			name:    "delete prow pipelines in the wrong cluster",
 			context: "wrong-cluster",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:   prowjobv1.KnativePipelineAgent,
+					Agent:   prowjobv1.KnativePipelineRunAgent,
 					Cluster: "target-cluster",
-					PipelineSpec: &pipelinev1alpha1.PipelineSpec{
-						ServiceAccountName: "robot",
+					PipelineRunSpec: &pipelinev1alpha1.PipelineRunSpec{
+						ServiceAccount: "robot",
 					},
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -336,12 +336,12 @@ func TestReconcile(t *testing.T) {
 					Description: "fancy",
 				},
 			},
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineAgent
-				pj.Spec.PipelineSpec = &pipelineSpec
-				b, err := makePipeline(pj, "5")
+				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				b, err := makePipelineRun(pj, "5")
 				if err != nil {
 					panic(err)
 				}
@@ -354,10 +354,10 @@ func TestReconcile(t *testing.T) {
 			context: "wrong-cluster",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:   prowjobv1.KnativePipelineAgent,
+					Agent:   prowjobv1.KnativePipelineRunAgent,
 					Cluster: "target-cluster",
-					PipelineSpec: &pipelinev1alpha1.PipelineSpec{
-						ServiceAccountName: "robot",
+					PipelineRunSpec: &pipelinev1alpha1.PipelineRunSpec{
+						ServiceAccount: "robot",
 					},
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -366,12 +366,12 @@ func TestReconcile(t *testing.T) {
 					Description: "fancy",
 				},
 			},
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineAgent
-				pj.Spec.PipelineSpec = &pipelineSpec
-				b, err := makePipeline(pj, "5")
+				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				b, err := makePipelineRun(pj, "5")
 				if err != nil {
 					panic(err)
 				}
@@ -379,15 +379,15 @@ func TestReconcile(t *testing.T) {
 				return b
 			}(),
 			expectedJob:   noJobChange,
-			expectedPipeline: noPipelineChange,
+			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
 			name: "update job status if pipeline resets",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent: prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelinev1alpha1.PipelineSpec{
-						ServiceAccountName: "robot",
+					Agent: prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelinev1alpha1.PipelineRunSpec{
+						ServiceAccount: "robot",
 					},
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -396,53 +396,53 @@ func TestReconcile(t *testing.T) {
 					Description: "fancy",
 				},
 			},
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineAgent
-				pj.Spec.PipelineSpec = &pipelineSpec
-				b, err := makePipeline(pj, "5")
+				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				b, err := makePipelineRun(pj, "5")
 				if err != nil {
 					panic(err)
 				}
 				return b
 			}(),
-			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.Pipeline) prowjobv1.ProwJob {
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status.State = prowjobv1.TriggeredState
 				pj.Status.Description = descScheduling
 				return pj
 			},
-			expectedPipeline: noPipelineChange,
+			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
 			name: "prowjob goes pending when pipeline starts",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State:       prowjobv1.TriggeredState,
 					Description: "fancy",
 				},
 			},
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineAgent
-				pj.Spec.PipelineSpec = &pipelineSpec
-				b, err := makePipeline(pj, "1")
+				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				b, err := makePipelineRun(pj, "1")
 				if err != nil {
 					panic(err)
 				}
 				b.Status.SetCondition(&duckv1alpha1.Condition{
-					Type:    pipelinev1alpha1.PipelineSucceeded,
+					Type:    duckv1alpha1.ConditionSucceeded,
 					Message: "hello",
 				})
 				b.Status.StartTime = now
 				return b
 			}(),
-			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.Pipeline) prowjobv1.ProwJob {
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status = prowjobv1.ProwJobStatus{
 					StartTime:   now,
 					State:       prowjobv1.PendingState,
@@ -450,31 +450,31 @@ func TestReconcile(t *testing.T) {
 				}
 				return pj
 			},
-			expectedPipeline: noPipelineChange,
+			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
 			name: "prowjob succeeds when pipeline succeeds",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State:       prowjobv1.PendingState,
 					Description: "fancy",
 				},
 			},
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineAgent
-				pj.Spec.PipelineSpec = &pipelineSpec
-				b, err := makePipeline(pj, "22")
+				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				b, err := makePipelineRun(pj, "22")
 				if err != nil {
 					panic(err)
 				}
 				b.Status.SetCondition(&duckv1alpha1.Condition{
-					Type:    pipelinev1alpha1.PipelineSucceeded,
+					Type:    duckv1alpha1.ConditionSucceeded,
 					Status:  corev1.ConditionTrue,
 					Message: "hello",
 				})
@@ -482,7 +482,7 @@ func TestReconcile(t *testing.T) {
 				b.Status.StartTime = now
 				return b
 			}(),
-			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.Pipeline) prowjobv1.ProwJob {
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status = prowjobv1.ProwJobStatus{
 					StartTime:      now,
 					CompletionTime: &now,
@@ -491,31 +491,31 @@ func TestReconcile(t *testing.T) {
 				}
 				return pj
 			},
-			expectedPipeline: noPipelineChange,
+			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
 			name: "prowjob fails when pipeline fails",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State:       prowjobv1.PendingState,
 					Description: "fancy",
 				},
 			},
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineAgent
-				pj.Spec.PipelineSpec = &pipelineSpec
-				b, err := makePipeline(pj, "21")
+				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				b, err := makePipelineRun(pj, "21")
 				if err != nil {
 					panic(err)
 				}
 				b.Status.SetCondition(&duckv1alpha1.Condition{
-					Type:    pipelinev1alpha1.PipelineSucceeded,
+					Type:    duckv1alpha1.ConditionSucceeded,
 					Status:  corev1.ConditionFalse,
 					Message: "hello",
 				})
@@ -523,7 +523,7 @@ func TestReconcile(t *testing.T) {
 				b.Status.CompletionTime = now
 				return b
 			}(),
-			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.Pipeline) prowjobv1.ProwJob {
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status = prowjobv1.ProwJobStatus{
 					StartTime:      now,
 					CompletionTime: &now,
@@ -532,7 +532,7 @@ func TestReconcile(t *testing.T) {
 				}
 				return pj
 			},
-			expectedPipeline: noPipelineChange,
+			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
 			name:      "error when we cannot get prowjob",
@@ -540,8 +540,8 @@ func TestReconcile(t *testing.T) {
 			err:       true,
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State:       prowjobv1.PendingState,
@@ -551,19 +551,19 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name:      "error when we cannot get pipeline",
-			namespace: errorGetPipeline,
+			namespace: errorGetPipelineRun,
 			err:       true,
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineAgent
-				pj.Spec.PipelineSpec = &pipelineSpec
-				b, err := makePipeline(pj, "-72")
+				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				b, err := makePipelineRun(pj, "-72")
 				if err != nil {
 					panic(err)
 				}
 				b.Status.SetCondition(&duckv1alpha1.Condition{
-					Type:    pipelinev1alpha1.PipelineSucceeded,
+					Type:    duckv1alpha1.ConditionSucceeded,
 					Status:  corev1.ConditionTrue,
 					Message: "hello",
 				})
@@ -574,13 +574,13 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name:      "error when we cannot delete pipeline",
-			namespace: errorDeletePipeline,
+			namespace: errorDeletePipelineRun,
 			err:       true,
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.PipelineSpec = &pipelinev1alpha1.PipelineSpec{}
-				b, err := makePipeline(pj, "44")
+				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
+				b, err := makePipelineRun(pj, "44")
 				if err != nil {
 					panic(err)
 				}
@@ -589,15 +589,15 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name:      "error when we cannot create pipeline",
-			namespace: errorCreatePipeline,
+			namespace: errorCreatePipelineRun,
 			err:       true,
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 			},
-			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.Pipeline) prowjobv1.ProwJob {
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status = prowjobv1.ProwJobStatus{
 					StartTime:   now,
 					State:       prowjobv1.TriggeredState,
@@ -611,8 +611,8 @@ func TestReconcile(t *testing.T) {
 			err:  true,
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: nil,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: nil,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State: prowjobv1.TriggeredState,
@@ -625,25 +625,25 @@ func TestReconcile(t *testing.T) {
 			err:       true,
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:     prowjobv1.KnativePipelineAgent,
-					PipelineSpec: &pipelineSpec,
+					Agent:     prowjobv1.KnativePipelineRunAgent,
+					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
 					State:       prowjobv1.PendingState,
 					Description: "fancy",
 				},
 			},
-			observedPipeline: func() *pipelinev1alpha1.Pipeline {
+			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineAgent
-				pj.Spec.PipelineSpec = &pipelineSpec
-				b, err := makePipeline(pj, "42")
+				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				b, err := makePipelineRun(pj, "42")
 				if err != nil {
 					panic(err)
 				}
 				b.Status.SetCondition(&duckv1alpha1.Condition{
-					Type:    pipelinev1alpha1.PipelineSucceeded,
+					Type:    duckv1alpha1.ConditionSucceeded,
 					Status:  corev1.ConditionTrue,
 					Message: "hello",
 				})
@@ -666,7 +666,7 @@ func TestReconcile(t *testing.T) {
 			jk := toKey(fakePJCtx, fakePJNS, name)
 			r := &fakeReconciler{
 				jobs:   map[string]prowjobv1.ProwJob{},
-				pipelines: map[string]pipelinev1alpha1.Pipeline{},
+				pipelines: map[string]pipelinev1alpha1.PipelineRun{},
 				nows:   now,
 			}
 			if j := tc.observedJob; j != nil {
@@ -674,7 +674,7 @@ func TestReconcile(t *testing.T) {
 				j.Spec.Type = prowjobv1.PeriodicJob
 				r.jobs[jk] = *j
 			}
-			if b := tc.observedPipeline; b != nil {
+			if b := tc.observedPipelineRun; b != nil {
 				b.Name = name
 				r.pipelines[bk] = *b
 			}
@@ -682,9 +682,9 @@ func TestReconcile(t *testing.T) {
 			if j := tc.expectedJob; j != nil {
 				expectedJobs[jk] = j(r.jobs[jk], r.pipelines[bk])
 			}
-			expectedPipelines := map[string]pipelinev1alpha1.Pipeline{}
-			if b := tc.expectedPipeline; b != nil {
-				expectedPipelines[bk] = b(r.jobs[jk], r.pipelines[bk])
+			expectedPipelineRuns := map[string]pipelinev1alpha1.PipelineRun{}
+			if b := tc.expectedPipelineRun; b != nil {
+				expectedPipelineRuns[bk] = b(r.jobs[jk], r.pipelines[bk])
 			}
 			err := reconcile(r, bk)
 			switch {
@@ -696,65 +696,12 @@ func TestReconcile(t *testing.T) {
 				t.Error("failed to receive expected error")
 			case !equality.Semantic.DeepEqual(r.jobs, expectedJobs):
 				t.Errorf("prowjobs do not match:\n%s", diff.ObjectReflectDiff(expectedJobs, r.jobs))
-			case !equality.Semantic.DeepEqual(r.pipelines, expectedPipelines):
-				t.Errorf("pipelines do not match:\n%s", diff.ObjectReflectDiff(expectedPipelines, r.pipelines))
+			case !equality.Semantic.DeepEqual(r.pipelines, expectedPipelineRuns):
+				t.Errorf("pipelines do not match:\n%s", diff.ObjectReflectDiff(expectedPipelineRuns, r.pipelines))
 			}
 		})
 	}
 
-}
-
-func TestDefaultArguments(t *testing.T) {
-	cases := []struct {
-		name     string
-		t        pipelinev1alpha1.TemplateInstantiationSpec
-		env      map[string]string
-		expected pipelinev1alpha1.TemplateInstantiationSpec
-	}{
-		{
-			name: "nothing set works",
-		},
-		{
-			name: "add env",
-			env: map[string]string{
-				"hello": "world",
-			},
-			expected: pipelinev1alpha1.TemplateInstantiationSpec{
-				Arguments: []pipelinev1alpha1.ArgumentSpec{{Name: "hello", Value: "world"}},
-			},
-		},
-		{
-			name: "do not override env",
-			t: pipelinev1alpha1.TemplateInstantiationSpec{
-				Arguments: []pipelinev1alpha1.ArgumentSpec{
-					{Name: "ignore", Value: "this"},
-					{Name: "keep", Value: "original value"},
-				},
-			},
-			env: map[string]string{
-				"hello": "world",
-				"keep":  "should not see this",
-			},
-			expected: pipelinev1alpha1.TemplateInstantiationSpec{
-				Arguments: []pipelinev1alpha1.ArgumentSpec{
-					{Name: "ignore", Value: "this"},
-					{Name: "keep", Value: "original value"},
-					{Name: "hello", Value: "world"},
-				},
-			},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			templ := tc.t
-			defaultArguments(&templ, tc.env)
-			if !equality.Semantic.DeepEqual(templ, tc.expected) {
-				t.Errorf("pipelines do not match:\n%s", diff.ObjectReflectDiff(&tc.expected, templ))
-			}
-
-		})
-	}
 }
 
 func TestDefaultEnv(t *testing.T) {
@@ -812,16 +759,16 @@ func TestDefaultEnv(t *testing.T) {
 func TestInjectSource(t *testing.T) {
 	cases := []struct {
 		name     string
-		pipeline    pipelinev1alpha1.Pipeline
+		pipeline    pipelinev1alpha1.PipelineRun
 		pj       prowjobv1.ProwJob
-		expected func(*pipelinev1alpha1.Pipeline, prowjobv1.ProwJob)
+		expected func(*pipelinev1alpha1.PipelineRun, prowjobv1.ProwJob)
 		err      bool
 	}{
 		{
 			name: "do nothing when source is set",
-			pipeline: pipelinev1alpha1.Pipeline{
-				Spec: pipelinev1alpha1.PipelineSpec{
-					Source: &pipelinev1alpha1.SourceSpec{},
+			pipeline: pipelinev1alpha1.PipelineRun{
+				Spec: pipelinev1alpha1.PipelineRunSpec{
+
 				},
 			},
 		},
@@ -835,8 +782,8 @@ func TestInjectSource(t *testing.T) {
 		},
 		{
 			name: "inject source, volumes, workdir when refs are set",
-			pipeline: pipelinev1alpha1.Pipeline{
-				Spec: pipelinev1alpha1.PipelineSpec{
+			pipeline: pipelinev1alpha1.PipelineRun{
+				Spec: pipelinev1alpha1.PipelineRunSpec{
 					Steps: []corev1.Container{
 						{}, // Override
 						{WorkingDir: "do not override"},
@@ -852,7 +799,7 @@ func TestInjectSource(t *testing.T) {
 					},
 				},
 			},
-			expected: func(b *pipelinev1alpha1.Pipeline, pj prowjobv1.ProwJob) {
+			expected: func(b *pipelinev1alpha1.PipelineRun, pj prowjobv1.ProwJob) {
 				src, _, cloneVolumes, err := decorate.CloneRefs(pj, codeMount, logMount)
 				if err != nil {
 					t.Fatalf("failed to make clonerefs container: %v", err)
@@ -893,7 +840,7 @@ func TestInjectSource(t *testing.T) {
 	}
 }
 
-func TestPipelineMeta(t *testing.T) {
+func TestPipelineRunMeta(t *testing.T) {
 	cases := []struct {
 		name     string
 		pj       prowjobv1.ProwJob
@@ -930,7 +877,7 @@ func TestPipelineMeta(t *testing.T) {
 	}
 }
 
-func TestMakePipeline(t *testing.T) {
+func TestMakePipelineRun(t *testing.T) {
 	cases := []struct {
 		name string
 		job  func(prowjobv1.ProwJob) prowjobv1.ProwJob
@@ -961,7 +908,7 @@ func TestMakePipeline(t *testing.T) {
 				pj.Spec.DecorationConfig = &prowjobv1.DecorationConfig{
 					UtilityImages: &prowjobv1.UtilityImages{},
 				}
-				pj.Spec.PipelineSpec.Source = &pipelinev1alpha1.SourceSpec{}
+
 				return pj
 			},
 		},
@@ -973,14 +920,14 @@ func TestMakePipeline(t *testing.T) {
 			pj.Name = "world"
 			pj.Namespace = "hello"
 			pj.Spec.Type = prowjobv1.PeriodicJob
-			pj.Spec.PipelineSpec = &pipelinev1alpha1.PipelineSpec{}
-			pj.Spec.PipelineSpec.Steps = append(pj.Spec.PipelineSpec.Steps, corev1.Container{})
-			pj.Spec.PipelineSpec.Template = &pipelinev1alpha1.TemplateInstantiationSpec{}
+			pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
+			pj.Spec.PipelineRunSpec.Steps = append(pj.Spec.PipelineRunSpec.Steps, corev1.Container{})
+			pj.Spec.PipelineRunSpec.Template = &pipelinev1alpha1.TemplateInstantiationSpec{}
 			if tc.job != nil {
 				pj = tc.job(pj)
 			}
-			const randomPipelineID = "so-many-pipelines"
-			actual, err := makePipeline(pj, randomPipelineID)
+			const randomPipelineRunID = "so-many-pipelines"
+			actual, err := makePipelineRun(pj, randomPipelineRunID)
 			if err != nil {
 				if !tc.err {
 					t.Errorf("unexpected error: %v", err)
@@ -989,11 +936,11 @@ func TestMakePipeline(t *testing.T) {
 			} else if tc.err {
 				t.Error("failed to receive expected error")
 			}
-			expected := pipelinev1alpha1.Pipeline{
+			expected := pipelinev1alpha1.PipelineRun{
 				ObjectMeta: pipelineMeta(pj),
-				Spec:       *pj.Spec.PipelineSpec,
+				Spec:       *pj.Spec.PipelineRunSpec,
 			}
-			env, err := pipelineEnv(pj, randomPipelineID)
+			env, err := pipelineEnv(pj, randomPipelineRunID)
 			if err != nil {
 				t.Fatalf("failed to create expected pipeline env: %v", err)
 			}
@@ -1053,7 +1000,7 @@ func TestProwJobStatus(t *testing.T) {
 	later := metav1.NewTime(now.Time.Add(1 * time.Hour))
 	cases := []struct {
 		name     string
-		input    pipelinev1alpha1.PipelineStatus
+		input    pipelinev1alpha1.PipelineRunStatus
 		state    prowjobv1.ProwJobState
 		desc     string
 		fallback string
@@ -1065,10 +1012,10 @@ func TestProwJobStatus(t *testing.T) {
 		},
 		{
 			name: "truly succeeded state returns success",
-			input: pipelinev1alpha1.PipelineStatus{
+			input: pipelinev1alpha1.PipelineRunStatus{
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineSucceeded,
+						Type:    pipelinev1alpha1.PipelineRunSucceeded,
 						Status:  corev1.ConditionTrue,
 						Message: "fancy",
 					},
@@ -1080,10 +1027,10 @@ func TestProwJobStatus(t *testing.T) {
 		},
 		{
 			name: "falsely succeeded state returns failure",
-			input: pipelinev1alpha1.PipelineStatus{
+			input: pipelinev1alpha1.PipelineRunStatus{
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineSucceeded,
+						Type:    pipelinev1alpha1.PipelineRunSucceeded,
 						Status:  corev1.ConditionFalse,
 						Message: "weird",
 					},
@@ -1095,10 +1042,10 @@ func TestProwJobStatus(t *testing.T) {
 		},
 		{
 			name: "unstarted job returns triggered/initializing",
-			input: pipelinev1alpha1.PipelineStatus{
+			input: pipelinev1alpha1.PipelineRunStatus{
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineSucceeded,
+						Type:    pipelinev1alpha1.PipelineRunSucceeded,
 						Status:  corev1.ConditionUnknown,
 						Message: "hola",
 					},
@@ -1110,11 +1057,11 @@ func TestProwJobStatus(t *testing.T) {
 		},
 		{
 			name: "unfinished job returns running",
-			input: pipelinev1alpha1.PipelineStatus{
+			input: pipelinev1alpha1.PipelineRunStatus{
 				StartTime: now,
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineSucceeded,
+						Type:    pipelinev1alpha1.PipelineRunSucceeded,
 						Status:  corev1.ConditionUnknown,
 						Message: "hola",
 					},
@@ -1126,12 +1073,12 @@ func TestProwJobStatus(t *testing.T) {
 		},
 		{
 			name: "pipelines with unknown success status are still running",
-			input: pipelinev1alpha1.PipelineStatus{
+			input: pipelinev1alpha1.PipelineRunStatus{
 				StartTime:      now,
 				CompletionTime: later,
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineSucceeded,
+						Type:    pipelinev1alpha1.PipelineRunSucceeded,
 						Status:  corev1.ConditionUnknown,
 						Message: "hola",
 					},
@@ -1143,7 +1090,7 @@ func TestProwJobStatus(t *testing.T) {
 		},
 		{
 			name: "completed pipelines without a succeeded condition end in error",
-			input: pipelinev1alpha1.PipelineStatus{
+			input: pipelinev1alpha1.PipelineRunStatus{
 				StartTime:      now,
 				CompletionTime: later,
 			},

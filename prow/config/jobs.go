@@ -22,6 +22,7 @@ import (
 	"time"
 
 	buildv1alpha1 "github.com/knative/build/pkg/apis/build/v1alpha1"
+	pipelinev1alpha1 "github.com/knative/build-pipeline/pkg/apis/pipeline/v1alpha1"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -106,7 +107,8 @@ type JobBase struct {
 	Spec *v1.PodSpec `json:"spec,omitempty"`
 	// BuildSpec is the Knative build spec used if Agent is knative-build.
 	BuildSpec *buildv1alpha1.BuildSpec `json:"build_spec,omitempty"`
-
+	// PipelineRunSpec is the Knative build pipeline spec used if Agent is knative-pipeline-run.
+	PipelineRunSpec *pipelinev1alpha1.PipelineRunSpec `json:"pipeline_run_spec,omitempty"`
 	UtilityConfig
 }
 

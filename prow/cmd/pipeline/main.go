@@ -203,7 +203,7 @@ func contextConfigs(kubeconfig, pipelineCluster string) (map[string]rest.Config,
 
 type pipelineConfig struct {
 	client   pipelineset.Interface
-	informer pipelineinfov1alpha1.PipelineInformer
+	informer pipelineinfov1alpha1.PipelineRunInformer
 }
 
 // newPipelineConfig returns a client and informer capable of mutating and monitoring the specified config.
@@ -215,17 +215,17 @@ func newPipelineConfig(cfg rest.Config, stop chan struct{}) (*pipelineConfig, er
 
 	// Ensure the knative-pipeline CRD is deployed
 	// TODO(fejta): probably a better way to do this
-	_, err = bc.Pipeline().Pipelines("").List(metav1.ListOptions{Limit: 1})
+	_, err = bc.PipelineV1alpha1().PipelineRuns("").List(metav1.ListOptions{Limit: 1})
 	if err != nil {
 		return nil, err
 	}
 	// Assume watches receive updates, but resync every 30m in case something wonky happens
 	bif := pipelineinfo.NewSharedInformerFactory(bc, 30*time.Minute)
-	bif.Pipeline().V1alpha1().Pipelines().Lister()
+	bif.Pipeline().V1alpha1().PipelineRuns().Lister()
 	go bif.Start(stop)
 	return &pipelineConfig{
 		client:   bc,
-		informer: bif.Pipeline().V1alpha1().Pipelines(),
+		informer: bif.Pipeline().V1alpha1().PipelineRuns(),
 	}, nil
 }
 
