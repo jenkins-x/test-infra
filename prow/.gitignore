@@ -1,3 +1,4 @@
+cmd/build/build
 cmd/hook/hook
 cmd/line/line
 cmd/sinker/sinker
@@ -8,6 +9,7 @@ cmd/tot/fallbackcheck/fallbackcheck
 cmd/crier/crier
 cmd/horologium/horologium
 cmd/plank/plank
+cmd/pipeline/pipeline
 cmd/jenkins-operator/jenkins-operator
 cmd/tide/tide
 cmd/clonerefs/clonerefs
