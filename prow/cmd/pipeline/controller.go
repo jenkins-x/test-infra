@@ -64,7 +64,7 @@ type limiter interface {
 type controller struct {
 	pjNamespace string
 	pjc         prowjobset.Interface
-	pipelines      map[string]pipelineConfig
+	pipelines   map[string]pipelineConfig
 	totURL      string
 
 	pjLister   prowjoblisters.ProwJobLister
@@ -74,9 +74,9 @@ type controller struct {
 
 	recorder record.EventRecorder
 
-	prowJobsDone bool
-	pipelinesDone   map[string]bool
-	wait         string
+	prowJobsDone  bool
+	pipelinesDone map[string]bool
+	wait          string
 }
 
 // hasSynced returns true when every prowjob and pipeline informer has synced.
@@ -125,7 +125,7 @@ func newController(kc kubernetes.Interface, pjc prowjobset.Interface, pji prowjo
 	// Create struct
 	c := &controller{
 		pjc:         pjc,
-		pipelines:      pipelineConfigs,
+		pipelines:   pipelineConfigs,
 		pjLister:    pji.Lister(),
 		pjInformer:  pji.Informer(),
 		workqueue:   rl,
@@ -309,7 +309,7 @@ func (c *controller) pipelineID(pj prowjobv1.ProwJob) (string, error) {
 	if pj.Spec.Refs.Repo == "" {
 		return "", fmt.Errorf("spec refs repo is empty")
 	}
-	jobName := strings.ToLower(fmt.Sprintf("%s/%s/%s", pj.Spec.Refs.Org, pj.Spec.Refs.Repo, branch))
+	jobName := fmt.Sprintf("%s/%s/%s", pj.Spec.Refs.Org, pj.Spec.Refs.Repo, branch)
 	logrus.Infof("get build id for jobname: %s, from URL %s", jobName, c.totURL)
 	return pjutil.GetBuildID(jobName, c.totURL)
 }
@@ -488,7 +488,6 @@ func pipelineEnv(pj prowjobv1.ProwJob, pipelineID string) (map[string]string, er
 	return downwardapi.EnvForSpec(downwardapi.NewJobSpec(pj.Spec, pipelineID, pj.Name))
 }
 
-
 // defaultEnv adds the map of environment variables to the container, except keys already defined.
 func defaultEnv(c *untypedcorev1.Container, rawEnv map[string]string) {
 	keys := sets.String{}
@@ -518,7 +517,6 @@ func makePipelineRun(pj prowjobv1.ProwJob, pipelineID string) (*pipelinev1alpha1
 
 	// todo JR add envars?
 	//injectEnvironment(&p, rawEnv)
-
 
 	return &p, nil
 }

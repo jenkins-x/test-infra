@@ -310,7 +310,7 @@ func (c *controller) buildID(pj prowjobv1.ProwJob) (string, error) {
 	if pj.Spec.Refs.Repo == "" {
 		return "", fmt.Errorf("spec refs repo is empty")
 	}
-	jobName := strings.ToLower(fmt.Sprintf("%s/%s/%s", pj.Spec.Refs.Org, pj.Spec.Refs.Repo, branch))
+	jobName := fmt.Sprintf("%s/%s/%s", pj.Spec.Refs.Org, pj.Spec.Refs.Repo, branch)
 	logrus.Infof("get build id for jobname: %s, from URL %s", jobName, c.totURL)
 	return pjutil.GetBuildID(jobName, c.totURL)
 }
@@ -635,7 +635,7 @@ func injectTimeout(b *buildv1alpha1.Build, pj prowjobv1.ProwJob) error {
 		// TODO should get this from configuration somewhere
 		b.Spec.Timeout = &metav1.Duration{Duration: time.Hour}
 	} else {
-		b.Spec.Timeout = &metav1.Duration{Duration:pj.Spec.DecorationConfig.Timeout}
+		b.Spec.Timeout = &metav1.Duration{Duration: pj.Spec.DecorationConfig.Timeout}
 	}
 
 	return nil
