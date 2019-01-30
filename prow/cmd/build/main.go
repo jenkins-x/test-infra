@@ -249,7 +249,6 @@ func main() {
 		}
 		pjNamespace = pc.ProwJobNamespace
 	}
-
 	configs, defaultContext, err := contextConfigs(o.kubeconfig, o.buildCluster)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error building client configs")

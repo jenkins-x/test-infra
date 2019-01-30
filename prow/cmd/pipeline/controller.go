@@ -242,7 +242,12 @@ func fromKey(key string) (string, string, string, error) {
 func (c *controller) enqueueKey(ctx string, obj interface{}) {
 	switch o := obj.(type) {
 	case *prowjobv1.ProwJob:
-		c.workqueue.AddRateLimited(toKey(ctx, o.Spec.Namespace, o.Name))
+		//todo JR namespace can be empty so fails to create pipelineruns later
+		ns := o.Spec.Namespace
+		if ns == "" {
+			ns = o.Namespace
+		}
+		c.workqueue.AddRateLimited(toKey(ctx, ns, o.Name))
 	case *pipelinev1alpha1.PipelineRun:
 		c.workqueue.AddRateLimited(toKey(ctx, o.Namespace, o.Name))
 	default:
