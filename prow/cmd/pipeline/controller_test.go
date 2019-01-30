@@ -19,10 +19,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"reflect"
-	"testing"
-	"time"
-
 	pipelinev1alpha1 "github.com/knative/build-pipeline/pkg/apis/pipeline/v1alpha1"
 	duckv1alpha1 "github.com/knative/pkg/apis/duck/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +26,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"reflect"
+	"testing"
 
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/kube"
@@ -439,7 +437,6 @@ func TestReconcile(t *testing.T) {
 					Type:    duckv1alpha1.ConditionSucceeded,
 					Message: "hello",
 				})
-				b.Status.StartTime = now
 				return b
 			}(),
 			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
@@ -478,8 +475,6 @@ func TestReconcile(t *testing.T) {
 					Status:  corev1.ConditionTrue,
 					Message: "hello",
 				})
-				b.Status.CompletionTime = now
-				b.Status.StartTime = now
 				return b
 			}(),
 			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
@@ -519,8 +514,6 @@ func TestReconcile(t *testing.T) {
 					Status:  corev1.ConditionFalse,
 					Message: "hello",
 				})
-				b.Status.StartTime = now
-				b.Status.CompletionTime = now
 				return b
 			}(),
 			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
@@ -567,8 +560,6 @@ func TestReconcile(t *testing.T) {
 					Status:  corev1.ConditionTrue,
 					Message: "hello",
 				})
-				b.Status.CompletionTime = now
-				b.Status.StartTime = now
 				return b
 			}(),
 		},
@@ -647,8 +638,6 @@ func TestReconcile(t *testing.T) {
 					Status:  corev1.ConditionTrue,
 					Message: "hello",
 				})
-				b.Status.CompletionTime = now
-				b.Status.StartTime = now
 				return b
 			}(),
 		}}
@@ -756,90 +745,6 @@ func TestDefaultEnv(t *testing.T) {
 	}
 }
 
-func TestInjectSource(t *testing.T) {
-	cases := []struct {
-		name     string
-		pipeline    pipelinev1alpha1.PipelineRun
-		pj       prowjobv1.ProwJob
-		expected func(*pipelinev1alpha1.PipelineRun, prowjobv1.ProwJob)
-		err      bool
-	}{
-		{
-			name: "do nothing when source is set",
-			pipeline: pipelinev1alpha1.PipelineRun{
-				Spec: pipelinev1alpha1.PipelineRunSpec{
-
-				},
-			},
-		},
-		{
-			name: "do nothing when no refs are set",
-			pj: prowjobv1.ProwJob{
-				Spec: prowjobv1.ProwJobSpec{
-					Type: prowjobv1.PeriodicJob,
-				},
-			},
-		},
-		{
-			name: "inject source, volumes, workdir when refs are set",
-			pipeline: pipelinev1alpha1.PipelineRun{
-				Spec: pipelinev1alpha1.PipelineRunSpec{
-					Steps: []corev1.Container{
-						{}, // Override
-						{WorkingDir: "do not override"},
-					},
-					Template: &pipelinev1alpha1.TemplateInstantiationSpec{},
-				},
-			},
-			pj: prowjobv1.ProwJob{
-				Spec: prowjobv1.ProwJobSpec{
-					ExtraRefs: []prowjobv1.Refs{{Org: "hi", Repo: "there"}},
-					DecorationConfig: &prowjobv1.DecorationConfig{
-						UtilityImages: &prowjobv1.UtilityImages{},
-					},
-				},
-			},
-			expected: func(b *pipelinev1alpha1.PipelineRun, pj prowjobv1.ProwJob) {
-				src, _, cloneVolumes, err := decorate.CloneRefs(pj, codeMount, logMount)
-				if err != nil {
-					t.Fatalf("failed to make clonerefs container: %v", err)
-				}
-				src.Name = ""
-				b.Spec.Volumes = append(b.Spec.Volumes, cloneVolumes...)
-				b.Spec.Source = &pipelinev1alpha1.SourceSpec{
-					Custom: src,
-				}
-				wd := workDir(pj.Spec.ExtraRefs[0])
-				b.Spec.Template.Arguments = append(b.Spec.Template.Arguments, wd)
-				b.Spec.Steps[0].WorkingDir = wd.Value
-
-			},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			expected := tc.pipeline
-			if tc.expected != nil {
-				tc.expected(&expected, tc.pj)
-			}
-
-			actual := &tc.pipeline
-			err := injectSource(actual, tc.pj)
-			switch {
-			case err != nil:
-				if !tc.err {
-					t.Errorf("unexpected error: %v", err)
-				}
-			case tc.err:
-				t.Error("failed to return expected error")
-			case !equality.Semantic.DeepEqual(actual, &expected):
-				t.Errorf("pipelines do not match:\n%s", diff.ObjectReflectDiff(&expected, actual))
-			}
-		})
-	}
-}
-
 func TestPipelineRunMeta(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -921,8 +826,7 @@ func TestMakePipelineRun(t *testing.T) {
 			pj.Namespace = "hello"
 			pj.Spec.Type = prowjobv1.PeriodicJob
 			pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
-			pj.Spec.PipelineRunSpec.Steps = append(pj.Spec.PipelineRunSpec.Steps, corev1.Container{})
-			pj.Spec.PipelineRunSpec.Template = &pipelinev1alpha1.TemplateInstantiationSpec{}
+
 			if tc.job != nil {
 				pj = tc.job(pj)
 			}
@@ -940,12 +844,7 @@ func TestMakePipelineRun(t *testing.T) {
 				ObjectMeta: pipelineMeta(pj),
 				Spec:       *pj.Spec.PipelineRunSpec,
 			}
-			env, err := pipelineEnv(pj, randomPipelineRunID)
-			if err != nil {
-				t.Fatalf("failed to create expected pipeline env: %v", err)
-			}
-			injectEnvironment(&expected, env)
-			err = injectSource(&expected, pj)
+
 			if err != nil {
 				t.Fatalf("failed to inject expected source: %v", err)
 			}
@@ -996,8 +895,6 @@ func TestDescription(t *testing.T) {
 }
 
 func TestProwJobStatus(t *testing.T) {
-	now := metav1.Now()
-	later := metav1.NewTime(now.Time.Add(1 * time.Hour))
 	cases := []struct {
 		name     string
 		input    pipelinev1alpha1.PipelineRunStatus
@@ -1015,7 +912,7 @@ func TestProwJobStatus(t *testing.T) {
 			input: pipelinev1alpha1.PipelineRunStatus{
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineRunSucceeded,
+						Type:    duckv1alpha1.ConditionSucceeded,
 						Status:  corev1.ConditionTrue,
 						Message: "fancy",
 					},
@@ -1030,7 +927,7 @@ func TestProwJobStatus(t *testing.T) {
 			input: pipelinev1alpha1.PipelineRunStatus{
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineRunSucceeded,
+						Type:    duckv1alpha1.ConditionSucceeded,
 						Status:  corev1.ConditionFalse,
 						Message: "weird",
 					},
@@ -1045,7 +942,7 @@ func TestProwJobStatus(t *testing.T) {
 			input: pipelinev1alpha1.PipelineRunStatus{
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineRunSucceeded,
+						Type:    duckv1alpha1.ConditionSucceeded,
 						Status:  corev1.ConditionUnknown,
 						Message: "hola",
 					},
@@ -1058,10 +955,9 @@ func TestProwJobStatus(t *testing.T) {
 		{
 			name: "unfinished job returns running",
 			input: pipelinev1alpha1.PipelineRunStatus{
-				StartTime: now,
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineRunSucceeded,
+						Type:    duckv1alpha1.ConditionSucceeded,
 						Status:  corev1.ConditionUnknown,
 						Message: "hola",
 					},
@@ -1074,11 +970,9 @@ func TestProwJobStatus(t *testing.T) {
 		{
 			name: "pipelines with unknown success status are still running",
 			input: pipelinev1alpha1.PipelineRunStatus{
-				StartTime:      now,
-				CompletionTime: later,
 				Conditions: []duckv1alpha1.Condition{
 					{
-						Type:    pipelinev1alpha1.PipelineRunSucceeded,
+						Type:    duckv1alpha1.ConditionSucceeded,
 						Status:  corev1.ConditionUnknown,
 						Message: "hola",
 					},
@@ -1091,8 +985,6 @@ func TestProwJobStatus(t *testing.T) {
 		{
 			name: "completed pipelines without a succeeded condition end in error",
 			input: pipelinev1alpha1.PipelineRunStatus{
-				StartTime:      now,
-				CompletionTime: later,
 			},
 			state: prowjobv1.ErrorState,
 			desc:  descMissingCondition,
