@@ -17,8 +17,13 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -51,6 +56,10 @@ import (
 
 const (
 	controllerName = "prow-pipeline-crd"
+)
+
+var (
+	sleep = time.Sleep
 )
 
 type limiter interface {
@@ -264,6 +273,22 @@ type reconciler interface {
 	updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, error)
 	now() metav1.Time
 	pipelineID(prowjobv1.ProwJob) (string, error)
+	postPipelineRunner(prowjobv1.ProwJob) error
+}
+
+func (c *controller) postPipelineRunner(pj prowjobv1.ProwJob) error {
+	logrus.Info("a")
+	sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
+	var revision string
+	if len(pj.Spec.Refs.Pulls) > 0 {
+		logrus.Info("b")
+		revision = pj.Spec.Refs.Pulls[0].SHA
+	} else {
+		logrus.Info("c")
+		revision = pj.Spec.Refs.BaseSHA
+	}
+	logrus.Info("d")
+	return pipelineRequest(sourceURL, revision)
 }
 
 func (c *controller) getProwJob(name string) (*prowjobv1.ProwJob, error) {
@@ -368,7 +393,8 @@ func reconcile(c reconciler, key string) error {
 	case p.DeletionTimestamp == nil:
 		havePipeline = true
 	}
-
+	logrus.Infof("spec %v", pj.Spec.PipelineRunSpec)
+	logrus.Infof("wantPipelineRun %v", wantPipelineRun)
 	// Should we create or delete this pipeline?
 	switch {
 	case !wantPipelineRun:
@@ -390,25 +416,34 @@ func reconcile(c reconciler, key string) error {
 	case finalState(pj.Status.State):
 		logrus.Infof("Observed finished %s", key)
 		return nil
-	case wantPipelineRun && pj.Spec.PipelineRunSpec == nil:
-		return errors.New("nil PipelineRunSpec")
-	case wantPipelineRun && !havePipeline:
-		id, err := c.pipelineID(*pj)
+	case wantPipelineRun && (pj.Spec.PipelineRunSpec == nil || pj.Spec.PipelineRunSpec.PipelineRef.Name == ""):
+		logrus.Info("generate pipeline resources from pipelinerunner")
+		// lets POST to Jenkins X pipeline runner
+		err = c.postPipelineRunner(*pj)
 		if err != nil {
-			return fmt.Errorf("failed to get pipeline id: %v", err)
+			return fmt.Errorf("posting pipeline: %v", err)
 		}
-		if p, err = makePipelineRun(*pj, id); err != nil {
-			return fmt.Errorf("make pipeline: %v", err)
-		}
-		logrus.Infof("Create pipelines/%s", key)
-		if p, err = c.createPipelineRun(ctx, namespace, p); err != nil {
-			return fmt.Errorf("create pipeline: %v", err)
-		}
+	case wantPipelineRun && !havePipeline:
+
+			logrus.Info("using embedded pipelinerun spec")
+			id, err := c.pipelineID(*pj)
+			if err != nil {
+				return fmt.Errorf("failed to get pipeline id: %v", err)
+			}
+			if p, err = makePipelineRun(*pj, id); err != nil {
+				return fmt.Errorf("make pipeline: %v", err)
+			}
+			logrus.Infof("Create pipelines/%s", key)
+			if p, err = c.createPipelineRun(ctx, namespace, p); err != nil {
+				return fmt.Errorf("create pipeline: %v", err)
+			}
+
 	}
 
 	// Ensure prowjob status is correct
 	haveState := pj.Status.State
 	haveMsg := pj.Status.Description
+	logrus.Infof("status %v", p.Status)
 	wantState, wantMsg := prowJobStatus(p.Status)
 	if haveState != wantState || haveMsg != wantMsg {
 		npj := pj.DeepCopy()
@@ -465,6 +500,7 @@ func prowJobStatus(ps pipelinev1alpha1.PipelineRunStatus) (prowjobv1.ProwJobStat
 	if pcond == nil {
 		return prowjobv1.TriggeredState, descScheduling
 	}
+	logrus.Infof("a %v", pcond)
 	cond := *pcond
 	switch {
 	case cond.Status == untypedcorev1.ConditionTrue:
@@ -524,4 +560,47 @@ func makePipelineRun(pj prowjobv1.ProwJob, pipelineID string) (*pipelinev1alpha1
 	//injectEnvironment(&p, rawEnv)
 
 	return &p, nil
+}
+
+// GetBuildID calls out to `tot` in order
+// to vend build identifier for the job
+func pipelineRequest(repo, revision string) (error) {
+	if repo == "" {
+		return fmt.Errorf("not git URL found to request pipeline")
+	}
+	logrus.Info("e")
+	var err error
+	gitURL, err := url.Parse(repo)
+	if err != nil {
+		return fmt.Errorf("invalid git URL url: %v", err)
+	}
+	logrus.Info("f")
+	pipelineURL, err := url.Parse("http://pipelinerunner")
+	if err != nil {
+		return fmt.Errorf("invalid pipelinerunner url: %v", err)
+	}
+	values := map[string]string{"gitUrl": gitURL.String(), "branch": revision}
+	jsonValue, _ := json.Marshal(values)
+	logrus.Infof("jsonValue %s", string(jsonValue))
+	logrus.Infof("url %s", pipelineURL.String())
+	resp, err := http.Post(pipelineURL.String(), "application/json", bytes.NewBuffer(jsonValue))
+
+	if err != nil {
+		return fmt.Errorf("posting pipelinerunner: %v", err)
+	}
+	logrus.Infof("j %v", resp)
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		err = fmt.Errorf("got unexpected response from tot: %v", resp.Status)
+	}
+	logrus.Info("k")
+	// todo let's log the resources that are created using the response
+	respData, err := ioutil.ReadAll(resp.Body)
+	logrus.Infof("1 %v", respData)
+	if err == nil {
+		logrus.Info("l")
+		return nil
+	}
+	logrus.Info("m")
+	return err
 }

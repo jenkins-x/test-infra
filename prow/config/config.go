@@ -985,8 +985,9 @@ func validateAgent(v JobBase, podNamespace string) error {
 		return fmt.Errorf("job build_specs require agent: %s (found %q)", b, agent)
 	case agent == b && v.BuildSpec == nil:
 		return errors.New("knative-build jobs require a build_spec")
-	case agent == p && v.PipelineRunSpec == nil:
-		return errors.New("knative-pipeline-run jobs require a pipeline_run_spec")
+	//todo if we're using Jenkins X pipeline runner we don't need a PipelineRunSpec
+	//case agent == p && v.PipelineRunSpec == nil:
+	//	return errors.New("knative-pipeline-run jobs require a pipeline_run_spec")
 	case v.DecorationConfig != nil && agent != k && agent != b:
 		// TODO(fejta): only source decoration supported...
 		return fmt.Errorf("decoration requires agent: %s or %s (found %q)", k, b, agent)
