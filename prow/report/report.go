@@ -73,7 +73,7 @@ func reportStatus(ghc GithubClient, pj kube.ProwJob, childDescription string) er
 			// The state of the status. Can be one of error, failure, pending, or success.
 			// https://developer.github.com/v3/repos/statuses/#create-a-status
 			State:       string(contextState),
-			Description: pj.Status.Description,
+			Description: description,
 			Context:     pj.Spec.Context,
 			TargetURL:   pj.Status.URL,
 		}); err != nil {
