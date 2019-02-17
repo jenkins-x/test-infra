@@ -295,7 +295,7 @@ func main() {
 	}
 
 	controller := newController(kc, pjc, pjif.Prow().V1().ProwJobs(), pipelineConfigs, o.totURL, pjNamespace, rateLimiter())
-	if err := controller.Run(2, stop); err != nil {
+	if err := controller.Run(1, stop); err != nil {
 		logrus.WithError(err).Fatal("Error running controller")
 	}
 	logrus.Info("Finished")

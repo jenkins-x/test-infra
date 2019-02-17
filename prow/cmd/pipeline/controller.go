@@ -43,6 +43,7 @@ import (
 	untypedcorev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -56,11 +57,22 @@ import (
 
 const (
 	controllerName = "prow-pipeline-crd"
+	prowJobName    = "prowJobName"
+	pipelineRun    = "PipelineRun"
+	prowJob        = "ProwJob"
 )
 
 var (
 	sleep = time.Sleep
 )
+
+type piplelineRunOptions struct {
+	GitUrl   string            `json:"gitUrl,omitempty"`
+	Branch   string            `json:"branch,omitempty"`
+	Context  string            `json:"context,omitempty"`
+	Revision string            `json:"revision,omitempty"`
+	Labels   map[string]string `json:"labels,omitempty"`
+}
 
 type limiter interface {
 	ShutDown()
@@ -86,6 +98,22 @@ type controller struct {
 	prowJobsDone  bool
 	pipelinesDone map[string]bool
 	wait          string
+}
+
+// PipelineRunResponse the results of triggering a pipeline run
+type PipelineRunResponse struct {
+	Resources []ObjectReference `json:"resources,omitempty"`
+}
+
+// ObjectReference represents a reference to a k8s resource
+type ObjectReference struct {
+	APIVersion string `json:"apiVersion" protobuf:"bytes,5,opt,name=apiVersion"`
+	// Kind of the referent.
+	// More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds
+	Kind string `json:"kind" protobuf:"bytes,1,opt,name=kind"`
+	// Name of the referent.
+	// More info: http://kubernetes.io/docs/user-guide/identifiers#names
+	Name string `json:"name" protobuf:"bytes,3,opt,name=name"`
 }
 
 // hasSynced returns true when every prowjob and pipeline informer has synced.
@@ -174,7 +202,7 @@ func newController(kc kubernetes.Interface, pjc prowjobset.Interface, pji prowjo
 	})
 
 	for ctx, cfg := range pipelineConfigs {
-		// Reconcile whenever a pipeline changes.
+		// Reconcile whenever a pipelinerun changes.
 		ctx := ctx // otherwise it will change
 		cfg.informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
@@ -234,17 +262,17 @@ func (c *controller) runWorker() {
 }
 
 // toKey returns context/namespace/name
-func toKey(ctx, namespace, name string) string {
-	return strings.Join([]string{ctx, namespace, name}, "/")
+func toKey(ctx, namespace, name, kind string) string {
+	return strings.Join([]string{ctx, namespace, name, kind}, "/")
 }
 
 // fromKey converts toKey back into its parts
-func fromKey(key string) (string, string, string, error) {
+func fromKey(key string) (string, string, string, string, error) {
 	parts := strings.Split(key, "/")
-	if len(parts) != 3 {
-		return "", "", "", fmt.Errorf("bad key: %q", key)
+	if len(parts) != 4 {
+		return "", "", "", "", fmt.Errorf("bad key: %q", key)
 	}
-	return parts[0], parts[1], parts[2], nil
+	return parts[0], parts[1], parts[2], parts[3], nil
 }
 
 // enqueueKey schedules an item for reconciliation.
@@ -256,9 +284,9 @@ func (c *controller) enqueueKey(ctx string, obj interface{}) {
 		if ns == "" {
 			ns = o.Namespace
 		}
-		c.workqueue.AddRateLimited(toKey(ctx, ns, o.Name))
+		c.workqueue.AddRateLimited(toKey(ctx, ns, o.Name, "ProwJob"))
 	case *pipelinev1alpha1.PipelineRun:
-		c.workqueue.AddRateLimited(toKey(ctx, o.Namespace, o.Name))
+		c.workqueue.AddRateLimited(toKey(ctx, o.Namespace, o.Name, "PipelineRun"))
 	default:
 		logrus.Warnf("cannot enqueue unknown type %T: %v", o, obj)
 		return
@@ -268,27 +296,28 @@ func (c *controller) enqueueKey(ctx string, obj interface{}) {
 type reconciler interface {
 	getProwJob(name string) (*prowjobv1.ProwJob, error)
 	getPipelineRun(context, namespace, name string) (*pipelinev1alpha1.PipelineRun, error)
+	getPipelineRunWithSelector(context, namespace, selector string) (*pipelinev1alpha1.PipelineRun, error)
 	deletePipelineRun(context, namespace, name string) error
 	createPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) (*pipelinev1alpha1.PipelineRun, error)
 	updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, error)
 	now() metav1.Time
 	pipelineID(prowjobv1.ProwJob) (string, error)
-	postPipelineRunner(prowjobv1.ProwJob) error
+	postPipelineRunner(prowjobv1.ProwJob, string) (string, error)
 }
 
-func (c *controller) postPipelineRunner(pj prowjobv1.ProwJob) error {
-	logrus.Info("a")
+func (c *controller) postPipelineRunner(pj prowjobv1.ProwJob, prowjobName string) (string, error) {
+	// todo not sure how to sort this out yet, but this is now Jenkins X specific
+	branch := downwardapi.GetBranch(downwardapi.NewJobSpec(pj.Spec, "", pj.Name))
+	context := pj.Spec.Context
+
 	sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
 	var revision string
 	if len(pj.Spec.Refs.Pulls) > 0 {
-		logrus.Info("b")
 		revision = pj.Spec.Refs.Pulls[0].SHA
 	} else {
-		logrus.Info("c")
 		revision = pj.Spec.Refs.BaseSHA
 	}
-	logrus.Info("d")
-	return pipelineRequest(sourceURL, revision)
+	return requestPipelineRun(sourceURL, revision, branch, context, prowjobName)
 }
 
 func (c *controller) getProwJob(name string) (*prowjobv1.ProwJob, error) {
@@ -307,6 +336,30 @@ func (c *controller) getPipelineRun(context, namespace, name string) (*pipelinev
 	}
 	return b.informer.Lister().PipelineRuns(namespace).Get(name)
 }
+
+func (c *controller) getPipelineRunWithSelector(context, namespace, selector string) (*pipelinev1alpha1.PipelineRun, error) {
+	b, ok := c.pipelines[context]
+	if !ok {
+		return nil, errors.New("context not found")
+	}
+
+	label, err := labels.Parse(selector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse selector %s", selector)
+	}
+	runs, err := b.informer.Lister().PipelineRuns(namespace).List(label)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pipelineruns with label %s", label.String())
+	}
+	if len(runs) > 1 {
+		return nil, fmt.Errorf("%s pipelineruns found with label %s, expected only 1", string(len(runs)), label.String())
+	}
+	if len(runs) == 0 {
+		return nil, apierrors.NewNotFound(pipelinev1alpha1.Resource("pipelinerun"), label.String())
+	}
+	return runs[0], nil
+}
+
 func (c *controller) deletePipelineRun(context, namespace, name string) error {
 	logrus.Debugf("deletePipeline(%s,%s,%s)", context, namespace, name)
 	b, ok := c.pipelines[context]
@@ -354,7 +407,9 @@ var (
 
 // reconcile ensures a knative-pipeline prowjob has a corresponding pipeline, updating the prowjob's status as the pipeline progresses.
 func reconcile(c reconciler, key string) error {
-	ctx, namespace, name, err := fromKey(key)
+
+	// if pipelinerun and prowjob name are different we will need to lookup the prowjob name from the pipelinerun label
+	ctx, namespace, name, kind, err := fromKey(key)
 	if err != nil {
 		runtime.HandleError(err)
 		return nil
@@ -363,42 +418,77 @@ func reconcile(c reconciler, key string) error {
 	// todo JR - need to nil out contexts to run on Jenkins X as default context is the same
 	ctx = *new(string)
 	var wantPipelineRun bool
+	var havePipelineRun bool
+	// todo JR maybe we can combine this with wantPipelineRun or havePipelineRun above but this seems safer for now
+	var reported bool
+	var pj *prowjobv1.ProwJob
+	var p *pipelinev1alpha1.PipelineRun
 
-	pj, err := c.getProwJob(name)
-	switch {
-	case apierrors.IsNotFound(err):
-		// Do not want pipeline
-	case err != nil:
-		return fmt.Errorf("get prowjob: %v", err)
-	case pj.Spec.Agent != prowjobv1.KnativePipelineRunAgent:
-		// Do not want a pipeline for this job
+	switch kind {
+	// if this is a pipelinerun then get the prowjobname from a label, also use the name in the key to lookup pipelinerun
+	case pipelineRun:
+		p, err = c.getPipelineRun(ctx, namespace, name)
+		if err != nil {
+			return fmt.Errorf("no pipelinerun found with name %s: %v", name, err)
+		}
+		prowJobName := p.Labels[prowJobName]
+		if prowJobName == "" {
+			return fmt.Errorf("no prowjobname label for pipelinerun %s: %v", name, err)
+		}
 
-		//todo JR we need to comment this out when run with Jenkins X
-	//case pj.Spec.Cluster != ctx:
-	//	// Pipeline is in wrong cluster, we do not want this pipeline
-	//	logrus.Warnf("%s found in context %s not %s", key, ctx, pj.Spec.Cluster)
-	case pj.DeletionTimestamp == nil:
-		wantPipelineRun = true
+		pj, err = c.getProwJob(prowJobName)
+		if err != nil {
+			return fmt.Errorf("no matching prowjob for pipelinerun %s: %v", name, err)
+		}
+
+		havePipelineRun = true
+
+		if p.DeletionTimestamp == nil {
+			wantPipelineRun = true
+		}
+
+	// if this is a prowjob look for pipelineruns using the prowjobname as a selector
+	case prowJob:
+		pj, err = c.getProwJob(name)
+		switch {
+		case apierrors.IsNotFound(err):
+			// Do not want pipeline
+		case err != nil:
+			return fmt.Errorf("get prowjob: %v", err)
+		case pj.Spec.Agent != prowjobv1.KnativePipelineRunAgent:
+			// Do not want a pipeline for this job
+		case pj.DeletionTimestamp == nil:
+			wantPipelineRun = true
+		}
+		//make pointer so we can compare with nil
+		if pj == nil {
+			return fmt.Errorf("no prowjob found")
+		}
+		status := &pj.Status
+		//add extra check as there is a delay for pipelinerun objects being created and we can get a watch event here
+		//that updates the prowjob with the reporter status and still not have a pipelinerun which causes a duplicate
+		//pipelinerun being requested
+		if status != nil && status.PrevReportStates != nil && (status.PrevReportStates["github-reporter"] == kube.TriggeredState) {
+			reported = true
+		}
+
+		selector := fmt.Sprintf("%s = %s", prowJobName, name)
+		p, err = c.getPipelineRunWithSelector(ctx, namespace, selector)
+		switch {
+		case apierrors.IsNotFound(err):
+			// Do not have a pipeline
+		case err != nil:
+			return fmt.Errorf("get pipelinerun %s: %v", key, err)
+		}
+		if p != nil {
+			havePipelineRun = true
+		}
 	}
 
-	var havePipeline bool
-
-	// TODO(fejta): make trigger set the expected Namespace for the pod/pipeline.
-	p, err := c.getPipelineRun(ctx, namespace, name)
-	switch {
-	case apierrors.IsNotFound(err):
-		// Do not have a pipeline
-	case err != nil:
-		return fmt.Errorf("get pipeline %s: %v", key, err)
-	case p.DeletionTimestamp == nil:
-		havePipeline = true
-	}
-	logrus.Infof("spec %v", pj.Spec.PipelineRunSpec)
-	logrus.Infof("wantPipelineRun %v", wantPipelineRun)
 	// Should we create or delete this pipeline?
 	switch {
 	case !wantPipelineRun:
-		if !havePipeline {
+		if !havePipelineRun {
 			if pj != nil && pj.Spec.Agent == prowjobv1.KnativePipelineRunAgent {
 				logrus.Infof("Observed deleted %s", key)
 			}
@@ -416,34 +506,36 @@ func reconcile(c reconciler, key string) error {
 	case finalState(pj.Status.State):
 		logrus.Infof("Observed finished %s", key)
 		return nil
-	case wantPipelineRun && (pj.Spec.PipelineRunSpec == nil || pj.Spec.PipelineRunSpec.PipelineRef.Name == ""):
-		logrus.Info("generate pipeline resources from pipelinerunner")
+	case wantPipelineRun && !havePipelineRun && !reported && (pj.Spec.PipelineRunSpec == nil || pj.Spec.PipelineRunSpec.PipelineRef.Name == ""):
 		// lets POST to Jenkins X pipeline runner
-		err = c.postPipelineRunner(*pj)
+		pipelineRunName, err := c.postPipelineRunner(*pj, name)
 		if err != nil {
 			return fmt.Errorf("posting pipeline: %v", err)
 		}
-	case wantPipelineRun && !havePipeline:
+		// get the pipelinerun object that was just created
+		p, err = c.getPipelineRun(ctx, namespace, pipelineRunName)
+		if err != nil {
+			return fmt.Errorf("finding pipeline %s: %v", name, err)
+		}
 
-			logrus.Info("using embedded pipelinerun spec")
-			id, err := c.pipelineID(*pj)
-			if err != nil {
-				return fmt.Errorf("failed to get pipeline id: %v", err)
-			}
-			if p, err = makePipelineRun(*pj, id); err != nil {
-				return fmt.Errorf("make pipeline: %v", err)
-			}
-			logrus.Infof("Create pipelines/%s", key)
-			if p, err = c.createPipelineRun(ctx, namespace, p); err != nil {
-				return fmt.Errorf("create pipeline: %v", err)
-			}
+	case wantPipelineRun && !reported && !havePipelineRun:
 
+		logrus.Info("using embedded pipelinerun spec")
+		id, err := c.pipelineID(*pj)
+		if err != nil {
+			return fmt.Errorf("failed to get pipeline id: %v", err)
+		}
+		if p, err = makePipelineRun(*pj, id); err != nil {
+			return fmt.Errorf("make pipeline: %v", err)
+		}
+		logrus.Infof("Create pipelines/%s", key)
+		if p, err = c.createPipelineRun(ctx, namespace, p); err != nil {
+			return fmt.Errorf("create pipeline: %v", err)
+		}
 	}
 
-	// Ensure prowjob status is correct
 	haveState := pj.Status.State
 	haveMsg := pj.Status.Description
-	logrus.Infof("status %v", p.Status)
 	wantState, wantMsg := prowJobStatus(p.Status)
 	if haveState != wantState || haveMsg != wantMsg {
 		npj := pj.DeepCopy()
@@ -500,7 +592,6 @@ func prowJobStatus(ps pipelinev1alpha1.PipelineRunStatus) (prowjobv1.ProwJobStat
 	if pcond == nil {
 		return prowjobv1.TriggeredState, descScheduling
 	}
-	logrus.Infof("a %v", pcond)
 	cond := *pcond
 	switch {
 	case cond.Status == untypedcorev1.ConditionTrue:
@@ -510,6 +601,7 @@ func prowJobStatus(ps pipelinev1alpha1.PipelineRunStatus) (prowjobv1.ProwJobStat
 	case cond.Status == untypedcorev1.ConditionUnknown:
 		return prowjobv1.PendingState, description(cond, descRunning)
 	}
+
 	logrus.Warnf("Unknown condition %#v", cond)
 	return prowjobv1.ErrorState, description(cond, descUnknown) // shouldn't happen
 }
@@ -564,43 +656,69 @@ func makePipelineRun(pj prowjobv1.ProwJob, pipelineID string) (*pipelinev1alpha1
 
 // GetBuildID calls out to `tot` in order
 // to vend build identifier for the job
-func pipelineRequest(repo, revision string) (error) {
+func requestPipelineRun(repo, revision, branch, context, prowjobName string) (string, error) {
 	if repo == "" {
-		return fmt.Errorf("not git URL found to request pipeline")
+		return "", fmt.Errorf("not git URL found to request pipeline")
 	}
-	logrus.Info("e")
 	var err error
 	gitURL, err := url.Parse(repo)
 	if err != nil {
-		return fmt.Errorf("invalid git URL url: %v", err)
+		return "", fmt.Errorf("invalid git URL url: %v", err)
 	}
-	logrus.Info("f")
 	pipelineURL, err := url.Parse("http://pipelinerunner")
 	if err != nil {
-		return fmt.Errorf("invalid pipelinerunner url: %v", err)
+		return "", fmt.Errorf("invalid pipelinerunner url: %v", err)
 	}
-	values := map[string]string{"gitUrl": gitURL.String(), "branch": revision}
-	jsonValue, _ := json.Marshal(values)
-	logrus.Infof("jsonValue %s", string(jsonValue))
-	logrus.Infof("url %s", pipelineURL.String())
-	resp, err := http.Post(pipelineURL.String(), "application/json", bytes.NewBuffer(jsonValue))
+
+	labels := map[string]string{}
+	labels[prowJobName] = prowjobName
+	labels[kube.CreatedByProw] = "true"
+
+	o := piplelineRunOptions{
+		GitUrl:   gitURL.String(),
+		Branch:   branch,
+		Revision: revision,
+		Context:  context,
+		Labels:   labels,
+	}
+
+	jsonValue, _ := json.Marshal(o)
+	req, err := http.NewRequest("POST", pipelineURL.String(), bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := http.DefaultClient
+	resp, err := client.Do(req)
 
 	if err != nil {
-		return fmt.Errorf("posting pipelinerunner: %v", err)
+		return "", fmt.Errorf("posting pipelinerunner: %v", err)
 	}
-	logrus.Infof("j %v", resp)
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		err = fmt.Errorf("got unexpected response from tot: %v", resp.Status)
+		errorMessage := "got unexpected response from pipelinerunner"
+		respData, err1 := ioutil.ReadAll(resp.Body)
+		if err1 != nil {
+			return "", fmt.Errorf("%s: %v", errorMessage, resp.Status)
+		} else {
+			return "", fmt.Errorf("%s: %v, %s", errorMessage, resp.Status, string(respData))
+		}
 	}
-	logrus.Info("k")
-	// todo let's log the resources that are created using the response
+
 	respData, err := ioutil.ReadAll(resp.Body)
-	logrus.Infof("1 %v", respData)
-	if err == nil {
-		logrus.Info("l")
-		return nil
+	if err != nil {
+		return "", fmt.Errorf("reading response body %v: %v", resp, err)
 	}
-	logrus.Info("m")
-	return err
+	responses := PipelineRunResponse{}
+
+	err = json.Unmarshal(respData, &responses)
+	if err != nil {
+		return "", fmt.Errorf("marshalling response %v", err)
+	}
+
+	for _, resource := range responses.Resources {
+		if resource.Kind == "PipelineRun" {
+			return resource.Name, nil
+		}
+	}
+
+	return "", fmt.Errorf("no PipelineRun object found")
 }
