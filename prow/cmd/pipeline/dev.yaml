@@ -1,0 +1,119 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: prow-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prow-pipeline
+  template:
+    metadata:
+      labels:
+        app: prow-pipeline
+    spec:
+      serviceAccount: prow-pipeline
+      containers:
+      - name: pipeline
+        image: gcr.io/k8s-testimages/pipeline:latest  # Note: not gcr.io/k8s-prow for dev
+        imagePullPolicy: Always  # Good practice for dev/debugging, bad for prod
+        args:
+        - --tls-cert-file=/etc/tls/tls.crt
+        - --tls-private-key-file=/etc/tls/tls.key
+        ports:
+        - containerPort: 8443
+          name: validator-http
+          protocol: TCP
+        volumeMounts:
+        - name: tls
+          mountPath: /etc/tls
+      volumes:
+      - name: tls
+        secret:
+          secretName: prow-pipeline
+---
+
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: prow-pipeline
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: prow-pipeline
+rules:
+- apiGroups:
+  - pipeline.knative.dev
+  resources:
+  - pipelineruns
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - prow.k8s.io
+  resources:
+  - prowjobs
+  - prowjobs/status
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+
+---
+
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: prow-pipeline
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prow-pipeline
+subjects:
+- kind: ServiceAccount
+  name: prow-pipeline
+  namespace: default
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prow-pipeline
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app: prow-pipeline
+  type: ClusterIP
+---
+
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: prow-pipeline
+webhooks:
+- name: pipeline-validator.prow.k8s.io
+  failurePolicy: Fail
+  rules:
+  - apiGroups:
+    - prow.k8s.io
+    apiVersions:
+    - "*"
+    operations:
+    - UPDATE
+    resources:
+    - prowjobs
+  clientConfig:
+    caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURwakNDQW82Z0F3SUJBZ0lVWWlsUEs5endJbnBkVjRFeE8wTEh3ZENXNkdJd0RRWUpLb1pJaHZjTkFRRUwKQlFBd2F6RUxNQWtHQTFVRUJoTUNWVk14RXpBUkJnTlZCQWdUQ2xkaGMyaHBibWQwYjI0eEVEQU9CZ05WQkFjVApCMU5sWVhSMGJHVXhFekFSQmdOVkJBb1RDbkJ5YjNjdFluVnBiR1F4Q3pBSkJnTlZCQXNUQWtOQk1STXdFUVlEClZRUURFd3B3Y205M0xXSjFhV3hrTUI0WERURTRNRGd3TkRBeE1qZ3dNRm9YRFRJek1EZ3dNekF4TWpnd01Gb3cKYXpFTE1Ba0dBMVVFQmhNQ1ZWTXhFekFSQmdOVkJBZ1RDbGRoYzJocGJtZDBiMjR4RURBT0JnTlZCQWNUQjFObApZWFIwYkdVeEV6QVJCZ05WQkFvVENuQnliM2N0WW5WcGJHUXhDekFKQmdOVkJBc1RBa05CTVJNd0VRWURWUVFECkV3cHdjbTkzTFdKMWFXeGtNSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTJKUmYKSERHcCtJMC9oVlBnR0xOdjllTFhrNHpMb3pFUnNRMnBhNDdXSTJlbVJkenZLUVlNYmVNSzRDY1JUMTkvQVhFQgpySVFwYlhEN0x6NzlOMTRPb3hPUTk4V2FwRDhhVGRPSkFva1pnb3ArNklvZnk0cGFib0FFbWlBcmZQdUVyN01JCkhqSTVuSGsvY0crcmJadmtkZUczYnkwVkp3YVc2SnM4bkdpMVFvWnBXcTJ2UXpnOUhTQTVtM01ZSkRxSkZJWXYKeEk1dEEweGZ5RmpnbmNoTFJzdVlxclRtbnE1ME91VnhOa05HRmgwdERTT0J2dlBEbk45b2phTzQ4TWxZL3lDeApYTDNMUWVLRUJTdVlvU1NiUGI2eEg0QmcrWkxJZXNUT25kNE9oK3cxakxNOE9reUEyKzRpcXJya2hzclU3UXB5CkNlZWhkamRRaFFNejFsTGVsUUlEQVFBQm8wSXdRREFPQmdOVkhROEJBZjhFQkFNQ0FRWXdEd1lEVlIwVEFRSC8KQkFVd0F3RUIvekFkQmdOVkhRNEVGZ1FVWFh2VDRReWtObkxkRGZPUDRMajRqNU83TkJBd0RRWUpLb1pJaHZjTgpBUUVMQlFBRGdnRUJBTE1VUHZyRnZlRU0zcmRkcUtWOTZ1REo4OUFRbHhtOFZIQi9DMlNKQVRXSmNzRUZSblVMCmxPWGdjN0ZQcVFWZUI2d1htSmR3Rm9yMVU1N0xjVXlHMTlKNlhwSWRLMHVlam5GdXZ6V3ExaFVtQlJzb1RnSXUKTHVkVHJWMTN3MVhqME9ieG90eG1nTEhRSzZURlYydTQ2cWZHYytPeHF2MlpZcmRmR0ZjdHFnQkEwa1JUaFRJSAp5bDBOejRmcTVlYUlIbnppeVNLbitGNXNrd2wyc2kraEc2SG1MN3lqNWtsd2VLOEJWT3NxYXVzYk53T3UzdWhYCnhlWUpKRkx4MUh4S1ovVmhVaVBJQVZ1OE5hZ3lWOWRycTdUWVJkMnRzY0F4LzJ1V2tDd2N2eURJMlNPK0xiRnAKMUNiN0dZdmk0NEZaVUJ5Tm9nb216VUhpSDJSU2hKV0FBQWs9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+    service:
+      name: prow-pipeline
+      namespace: default
+      path: /validate
