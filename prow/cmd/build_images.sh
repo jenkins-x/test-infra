@@ -11,7 +11,8 @@ for i in $CMDS
 do
   echo "building ${i}"
   pushd ${i}
-    GOOS=linux GOARCH=amd64  go build ./...
+    # Need to build without dynamic linking to linux libraries to run in containers
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64  go build -a -ldflags '-extldflags "-static"' ./...
     docker build -t jenkinsxio/${i}:$TAG .
     docker push jenkinsxio/${i}:$TAG
   popd
