@@ -970,7 +970,7 @@ func validateLabels(labels map[string]string) error {
 func validateAgent(v JobBase, podNamespace string) error {
 	k := string(prowjobv1.KubernetesAgent)
 	b := string(prowjobv1.KnativeBuildAgent)
-	p := string(prowjobv1.KnativePipelineRunAgent)
+	p := string(prowjobv1.TektonAgent)
 	j := string(prowjobv1.JenkinsAgent)
 	agents := sets.NewString(k, b, j, p)
 	agent := v.Agent

@@ -223,7 +223,7 @@ func TestReconcile(t *testing.T) {
 		name: "new prow job creates pipeline",
 		observedJob: &prowjobv1.ProwJob{
 			Spec: prowjobv1.ProwJobSpec{
-				Agent:           prowjobv1.KnativePipelineRunAgent,
+				Agent:           prowjobv1.TektonAgent,
 				PipelineRunSpec: &pipelineSpec,
 			},
 		},
@@ -248,7 +248,7 @@ func TestReconcile(t *testing.T) {
 			name: "do not create pipeline for failed prowjob",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -261,7 +261,7 @@ func TestReconcile(t *testing.T) {
 			name: "do not create pipeline for successful prowjob",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -274,7 +274,7 @@ func TestReconcile(t *testing.T) {
 			name: "do not create pipeline for aborted prowjob",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -331,7 +331,7 @@ func TestReconcile(t *testing.T) {
 			context: "wrong-cluster",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:   prowjobv1.KnativePipelineRunAgent,
+					Agent:   prowjobv1.TektonAgent,
 					Cluster: "target-cluster",
 					PipelineRunSpec: &pipelinev1alpha1.PipelineRunSpec{
 						ServiceAccount: "robot",
@@ -346,7 +346,7 @@ func TestReconcile(t *testing.T) {
 			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
 				b, err := makePipelineRun(pj, "5")
 				if err != nil {
@@ -361,7 +361,7 @@ func TestReconcile(t *testing.T) {
 			context: "wrong-cluster",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:   prowjobv1.KnativePipelineRunAgent,
+					Agent:   prowjobv1.TektonAgent,
 					Cluster: "target-cluster",
 					PipelineRunSpec: &pipelinev1alpha1.PipelineRunSpec{
 						ServiceAccount: "robot",
@@ -376,7 +376,7 @@ func TestReconcile(t *testing.T) {
 			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
 				b, err := makePipelineRun(pj, "5")
 				if err != nil {
@@ -392,7 +392,7 @@ func TestReconcile(t *testing.T) {
 			name: "update job status if pipeline resets",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent: prowjobv1.KnativePipelineRunAgent,
+					Agent: prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelinev1alpha1.PipelineRunSpec{
 						ServiceAccount: "robot",
 					},
@@ -406,7 +406,7 @@ func TestReconcile(t *testing.T) {
 			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
 				b, err := makePipelineRun(pj, "5")
 				if err != nil {
@@ -425,7 +425,7 @@ func TestReconcile(t *testing.T) {
 			name: "prowjob goes pending when pipeline starts",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -436,7 +436,7 @@ func TestReconcile(t *testing.T) {
 			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
 				b, err := makePipelineRun(pj, "1")
 				if err != nil {
@@ -462,7 +462,7 @@ func TestReconcile(t *testing.T) {
 			name: "prowjob succeeds when pipeline succeeds",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -473,7 +473,7 @@ func TestReconcile(t *testing.T) {
 			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
 				b, err := makePipelineRun(pj, "22")
 				if err != nil {
@@ -501,7 +501,7 @@ func TestReconcile(t *testing.T) {
 			name: "prowjob fails when pipeline fails",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -512,7 +512,7 @@ func TestReconcile(t *testing.T) {
 			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
 				b, err := makePipelineRun(pj, "21")
 				if err != nil {
@@ -542,7 +542,7 @@ func TestReconcile(t *testing.T) {
 			err:       true,
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -558,7 +558,7 @@ func TestReconcile(t *testing.T) {
 			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
 				b, err := makePipelineRun(pj, "-72")
 				if err != nil {
@@ -593,7 +593,7 @@ func TestReconcile(t *testing.T) {
 			err:       true,
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 			},
@@ -611,7 +611,7 @@ func TestReconcile(t *testing.T) {
 			err:  true,
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: nil,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -625,7 +625,7 @@ func TestReconcile(t *testing.T) {
 			err:       true,
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
-					Agent:           prowjobv1.KnativePipelineRunAgent,
+					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
@@ -636,7 +636,7 @@ func TestReconcile(t *testing.T) {
 			observedPipelineRun: func() *pipelinev1alpha1.PipelineRun {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
-				pj.Spec.Agent = prowjobv1.KnativePipelineRunAgent
+				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
 				b, err := makePipelineRun(pj, "42")
 				if err != nil {

@@ -455,7 +455,7 @@ func reconcile(c reconciler, key string) error {
 			// Do not want pipeline
 		case err != nil:
 			return fmt.Errorf("get prowjob: %v", err)
-		case pj.Spec.Agent != prowjobv1.KnativePipelineRunAgent:
+		case pj.Spec.Agent != prowjobv1.TektonAgent:
 			// Do not want a pipeline for this job
 		case pj.DeletionTimestamp == nil:
 			wantPipelineRun = true
@@ -489,7 +489,7 @@ func reconcile(c reconciler, key string) error {
 	switch {
 	case !wantPipelineRun:
 		if !havePipelineRun {
-			if pj != nil && pj.Spec.Agent == prowjobv1.KnativePipelineRunAgent {
+			if pj != nil && pj.Spec.Agent == prowjobv1.TektonAgent {
 				logrus.Infof("Observed deleted %s", key)
 			}
 			return nil
@@ -532,6 +532,10 @@ func reconcile(c reconciler, key string) error {
 		if p, err = c.createPipelineRun(ctx, namespace, p); err != nil {
 			return fmt.Errorf("create pipeline: %v", err)
 		}
+	}
+
+	if p == nil {
+		return fmt.Errorf("no pipeline found or created for %s, wantPipelineRun was %v", key, wantPipelineRun)
 	}
 
 	haveState := pj.Status.State
