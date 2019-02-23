@@ -49,11 +49,11 @@ import (
 )
 
 type options struct {
-	allContexts  bool
+	allContexts     bool
 	pipelineCluster string
-	config       string
-	kubeconfig   string
-	totURL       string
+	config          string
+	kubeconfig      string
+	totURL          string
 
 	// Create these values by following:
 	//   https://github.com/kelseyhightower/grafeas-tutorial/blob/master/pki/gen-certs.sh
@@ -215,17 +215,17 @@ func newPipelineConfig(cfg rest.Config, stop chan struct{}) (*pipelineConfig, er
 
 	// Ensure the knative-pipeline CRD is deployed
 	// TODO(fejta): probably a better way to do this
-	_, err = bc.PipelineV1alpha1().PipelineRuns("").List(metav1.ListOptions{Limit: 1})
+	_, err = bc.TektonV1alpha1().PipelineRuns("").List(metav1.ListOptions{Limit: 1})
 	if err != nil {
 		return nil, err
 	}
 	// Assume watches receive updates, but resync every 30m in case something wonky happens
 	bif := pipelineinfo.NewSharedInformerFactory(bc, 30*time.Minute)
-	bif.Pipeline().V1alpha1().PipelineRuns().Lister()
+	bif.Tekton().V1alpha1().PipelineRuns().Lister()
 	go bif.Start(stop)
 	return &pipelineConfig{
 		client:   bc,
-		informer: bif.Pipeline().V1alpha1().PipelineRuns(),
+		informer: bif.Tekton().V1alpha1().PipelineRuns(),
 	}, nil
 }
 

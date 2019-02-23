@@ -824,8 +824,7 @@
   revision = "v0.3.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:d0414ca6bc02f0ab926970fd143dbcf2b02ab4d2e1a4839c8d05b6f9122e9484"
+  digest = "1:9cf16c7e589e849730c2a22eb178bdc1327b2ccc38277edd611b63990600ea4d"
   name = "github.com/knative/build-pipeline"
   packages = [
     "pkg/apis/pipeline",
@@ -838,10 +837,13 @@
     "pkg/client/informers/externalversions/pipeline",
     "pkg/client/informers/externalversions/pipeline/v1alpha1",
     "pkg/client/listers/pipeline/v1alpha1",
+    "pkg/names",
     "pkg/reconciler/v1alpha1/taskrun/list",
+    "pkg/reconciler/v1alpha1/templating",
   ]
   pruneopts = "NUT"
-  revision = "8183ecdb0ccc50c2664ec38b842991dfd295133b"
+  revision = "c1500fab83b09edadefb38bb8920a0c837d8f32b"
+  version = "v0.1.0"
 
 [[projects]]
   branch = "master"
@@ -1454,7 +1456,7 @@
 
 [[projects]]
   branch = "release-1.12"
-  digest = "1:bbe21e3a99f4385a4de6c2be058219cb9337dd77ec66ea535a69d75daf528880"
+  digest = "1:334344525d513f197137a09d93ae79e670e82df5aa73c3d7ac8ec9adae63bf7d"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/equality",
@@ -1489,6 +1491,7 @@
     "pkg/util/mergepatch",
     "pkg/util/naming",
     "pkg/util/net",
+    "pkg/util/rand",
     "pkg/util/runtime",
     "pkg/util/sets",
     "pkg/util/strategicpatch",

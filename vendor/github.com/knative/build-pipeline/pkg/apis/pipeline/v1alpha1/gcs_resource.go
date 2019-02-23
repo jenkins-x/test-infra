@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/knative/build-pipeline/pkg/names"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -42,7 +43,7 @@ type GCSResource struct {
 	Secrets []SecretParam `json:"secrets"`
 }
 
-// NewGCSResource creates a new GCS resource to pass to knative build
+// NewGCSResource creates a new GCS resource to pass to a Task
 func NewGCSResource(r *PipelineResource) (*GCSResource, error) {
 	if r.Spec.Type != PipelineResourceTypeStorage {
 		return nil, fmt.Errorf("GCSResource: Cannot create a GCS resource from a %s Pipeline Resource", r.Spec.Type)
@@ -115,10 +116,10 @@ func (s *GCSResource) GetUploadContainerSpec() ([]corev1.Container, error) {
 		args = []string{"-args", fmt.Sprintf("cp %s %s", filepath.Join(s.DestinationDir, "*"), s.Location)}
 	}
 
-	envVars, secretVolumeMount := getSecretEnvVarsAndVolumeMounts(s.Name, s.Secrets)
+	envVars, secretVolumeMount := getSecretEnvVarsAndVolumeMounts(s.Name, gcsSecretVolumeMountPath, s.Secrets)
 
 	return []corev1.Container{{
-		Name:         fmt.Sprintf("storage-upload-%s", s.Name),
+		Name:         names.SimpleNameGenerator.GenerateName(fmt.Sprintf("upload-%s", s.Name)),
 		Image:        *gsutilImage,
 		Args:         args,
 		VolumeMounts: secretVolumeMount,
@@ -138,42 +139,13 @@ func (s *GCSResource) GetDownloadContainerSpec() ([]corev1.Container, error) {
 		args = []string{"-args", fmt.Sprintf("cp %s %s", s.Location, s.DestinationDir)}
 	}
 
-	envVars, secretVolumeMount := getSecretEnvVarsAndVolumeMounts(s.Name, s.Secrets)
-	return []corev1.Container{{
-		Name:         fmt.Sprintf("storage-fetch-%s", s.Name),
-		Image:        *gsutilImage,
-		Args:         args,
-		Env:          envVars,
-		VolumeMounts: secretVolumeMount,
-	}}, nil
-}
-
-func getSecretEnvVarsAndVolumeMounts(resourceName string, s []SecretParam) ([]corev1.EnvVar, []corev1.VolumeMount) {
-	mountPaths := make(map[string]struct{})
-	var (
-		envVars           []corev1.EnvVar
-		secretVolumeMount []corev1.VolumeMount
-		authVar           bool
-	)
-
-	for _, secretParam := range s {
-		if secretParam.FieldName == "GOOGLE_APPLICATION_CREDENTIALS" && !authVar {
-			authVar = true
-			mountPath := filepath.Join(gcsSecretVolumeMountPath, secretParam.SecretName)
-
-			envVars = append(envVars, corev1.EnvVar{
-				Name:  strings.ToUpper(secretParam.FieldName),
-				Value: filepath.Join(mountPath, secretParam.SecretKey),
-			})
-
-			if _, ok := mountPaths[mountPath]; !ok {
-				secretVolumeMount = append(secretVolumeMount, corev1.VolumeMount{
-					Name:      fmt.Sprintf("volume-%s-%s", resourceName, secretParam.SecretName),
-					MountPath: mountPath,
-				})
-				mountPaths[mountPath] = struct{}{}
-			}
-		}
-	}
-	return envVars, secretVolumeMount
+	envVars, secretVolumeMount := getSecretEnvVarsAndVolumeMounts(s.Name, gcsSecretVolumeMountPath, s.Secrets)
+	return []corev1.Container{
+		CreateDirContainer(s.Name, s.DestinationDir), {
+			Name:         names.SimpleNameGenerator.GenerateName(fmt.Sprintf("fetch-%s", s.Name)),
+			Image:        *gsutilImage,
+			Args:         args,
+			Env:          envVars,
+			VolumeMounts: secretVolumeMount,
+		}}, nil
 }

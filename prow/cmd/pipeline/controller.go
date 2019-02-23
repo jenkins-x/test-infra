@@ -366,7 +366,7 @@ func (c *controller) deletePipelineRun(context, namespace, name string) error {
 	if !ok {
 		return errors.New("context not found")
 	}
-	return b.client.PipelineV1alpha1().PipelineRuns(namespace).Delete(name, &metav1.DeleteOptions{})
+	return b.client.TektonV1alpha1().PipelineRuns(namespace).Delete(name, &metav1.DeleteOptions{})
 }
 func (c *controller) createPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) (*pipelinev1alpha1.PipelineRun, error) {
 	logrus.Debugf("createPipelineRun(%s,%s,%s)", context, namespace, b.Name)
@@ -374,7 +374,7 @@ func (c *controller) createPipelineRun(context, namespace string, b *pipelinev1a
 	if !ok {
 		return nil, errors.New("context not found")
 	}
-	return bc.client.PipelineV1alpha1().PipelineRuns(namespace).Create(b)
+	return bc.client.TektonV1alpha1().PipelineRuns(namespace).Create(b)
 }
 func (c *controller) now() metav1.Time {
 	return metav1.Now()

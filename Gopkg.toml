@@ -121,3 +121,7 @@ required = [
   name = "gopkg.in/yaml.v2"
   # ensure we're using an updated version, as sigs.k8s.io/yaml depends on it
   version = "2.2.1"
+
+[[constraint]]
+  name = "github.com/knative/build-pipeline"
+  version = "0.1.0"

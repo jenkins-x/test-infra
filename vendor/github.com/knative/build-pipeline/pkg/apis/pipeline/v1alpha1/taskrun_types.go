@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/knative/pkg/apis"
 	duckv1alpha1 "github.com/knative/pkg/apis/duck/v1alpha1"
@@ -43,8 +44,6 @@ type TaskRunSpec struct {
 	// +optional
 	Results *Results `json:"results,omitempty"`
 	// +optional
-	Generation int64 `json:"generation,omitempty"`
-	// +optional
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 	// no more than one of the TaskRef and TaskSpec may be specified.
 	// +optional
@@ -54,6 +53,19 @@ type TaskRunSpec struct {
 	// Used for cancelling a taskrun (and maybe more later on)
 	// +optional
 	Status TaskRunSpecStatus
+	// Time after which the build times out. Defaults to 10 minutes.
+	// Specified build timeout should be less than 24h.
+	// Refer Go's ParseDuration documentation for expected format: https://golang.org/pkg/time/#ParseDuration
+	// +optional
+	Timeout *metav1.Duration `json:"timeout,omitempty"`
+	// NodeSelector is a selector which must be true for the pod to fit on a node.
+	// Selector which must match a node's labels for the pod to be scheduled on that node.
+	// More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// If specified, the pod's scheduling constraints
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
 }
 
 // TaskRunSpecStatus defines the taskrun spec status the user can provide
@@ -136,6 +148,9 @@ func (tr *TaskRunStatus) GetCondition(t duckv1alpha1.ConditionType) *duckv1alpha
 	return taskRunCondSet.Manage(tr).GetCondition(t)
 }
 func (tr *TaskRunStatus) InitializeConditions() {
+	if tr.StartTime.IsZero() {
+		tr.StartTime = &metav1.Time{time.Now()}
+	}
 	taskRunCondSet.Manage(tr).InitializeConditions()
 }
 
@@ -202,4 +217,15 @@ func (tr *TaskRun) GetPipelineRunPVCName() string {
 		}
 	}
 	return ""
+}
+
+// HasPipeluneRunOwnerReference returns true of TaskRun has
+// owner reference of type PipelineRun
+func (tr *TaskRun) HasPipelineRunOwnerReference() bool {
+	for _, ref := range tr.GetOwnerReferences() {
+		if ref.Kind == pipelineRunControllerName {
+			return true
+		}
+	}
+	return false
 }

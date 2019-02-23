@@ -3,7 +3,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-TAG=pipeline1
+TAG=pipeline12
 CMDS="crier deck hook horologium plank pipeline build sinker tide"
 
 ## now loop through the above array

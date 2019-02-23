@@ -17,8 +17,21 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"flag"
 	"fmt"
 	"strings"
+
+	"github.com/knative/build-pipeline/pkg/names"
+	corev1 "k8s.io/api/core/v1"
+)
+
+const workspaceDir = "/workspace"
+
+var (
+	gitSource = "git-source"
+	// The container with Git that we use to implement the Git source step.
+	gitImage = flag.String("git-image", "override-with-git:latest",
+		"The container image containing our Git binary.")
 )
 
 // GitResource is an endpoint from which to get data which is required
@@ -30,10 +43,11 @@ type GitResource struct {
 	// Git revision (branch, tag, commit SHA or ref) to clone.  See
 	// https://git-scm.com/docs/gitrevisions#_specifying_revisions for more
 	// information.
-	Revision string `json:"revision"`
+	Revision   string `json:"revision"`
+	TargetPath string
 }
 
-// NewGitResource create a new git resource to pass to Knative Build
+// NewGitResource create a new git resource to pass to a Task
 func NewGitResource(r *PipelineResource) (*GitResource, error) {
 	if r.Spec.Type != PipelineResourceTypeGit {
 		return nil, fmt.Errorf("GitResource: Cannot create a Git resource from a %s Pipeline Resource", r.Spec.Type)
@@ -83,4 +97,33 @@ func (s *GitResource) Replacements() map[string]string {
 		"url":      s.URL,
 		"revision": s.Revision,
 	}
+}
+
+func (s *GitResource) GetDownloadContainerSpec() ([]corev1.Container, error) {
+	args := []string{"-url", s.URL,
+		"-revision", s.Revision,
+	}
+	var dPath string
+	if s.TargetPath != "" {
+		dPath = s.TargetPath
+	} else {
+		dPath = s.Name
+	}
+
+	args = append(args, []string{"-path", dPath}...)
+
+	return []corev1.Container{{
+		Name:       names.SimpleNameGenerator.GenerateName(gitSource + "-" + s.Name),
+		Image:      *gitImage,
+		Args:       args,
+		WorkingDir: workspaceDir,
+	}}, nil
+}
+
+func (s *GitResource) SetDestinationDirectory(path string) {
+	s.TargetPath = path
+}
+
+func (s *GitResource) GetUploadContainerSpec() ([]corev1.Container, error) {
+	return nil, nil
 }
