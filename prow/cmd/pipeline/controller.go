@@ -66,12 +66,15 @@ var (
 	sleep = time.Sleep
 )
 
-type piplelineRunOptions struct {
-	GitUrl   string            `json:"gitUrl,omitempty"`
-	Branch   string            `json:"branch,omitempty"`
-	Context  string            `json:"context,omitempty"`
-	Revision string            `json:"revision,omitempty"`
-	Labels   map[string]string `json:"labels,omitempty"`
+type PipelineRunRequest struct {
+	Labels      map[string]string     `json:"labels,omitempty"`
+	ProwJobSpec prowjobv1.ProwJobSpec `json:"prowJobSpec,omitempty"`
+}
+
+type Pull struct {
+	Author string `json:"author,omitempty"`
+	Number string `json:"number,omitempty"`
+	SHA    string `json:"sha,omitempty"`
 }
 
 type limiter interface {
@@ -302,22 +305,7 @@ type reconciler interface {
 	updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, error)
 	now() metav1.Time
 	pipelineID(prowjobv1.ProwJob) (string, error)
-	postPipelineRunner(prowjobv1.ProwJob, string) (string, error)
-}
-
-func (c *controller) postPipelineRunner(pj prowjobv1.ProwJob, prowjobName string) (string, error) {
-	// todo not sure how to sort this out yet, but this is now Jenkins X specific
-	branch := downwardapi.GetBranch(downwardapi.NewJobSpec(pj.Spec, "", pj.Name))
-	context := pj.Spec.Context
-
-	sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
-	var revision string
-	if len(pj.Spec.Refs.Pulls) > 0 {
-		revision = pj.Spec.Refs.Pulls[0].SHA
-	} else {
-		revision = pj.Spec.Refs.BaseSHA
-	}
-	return requestPipelineRun(sourceURL, revision, branch, context, prowjobName)
+	requestPipelineRun(prowjobv1.ProwJob, string) (string, error)
 }
 
 func (c *controller) getProwJob(name string) (*prowjobv1.ProwJob, error) {
@@ -508,7 +496,7 @@ func reconcile(c reconciler, key string) error {
 		return nil
 	case wantPipelineRun && !havePipelineRun && !reported && (pj.Spec.PipelineRunSpec == nil || pj.Spec.PipelineRunSpec.PipelineRef.Name == ""):
 		// lets POST to Jenkins X pipeline runner
-		pipelineRunName, err := c.postPipelineRunner(*pj, name)
+		pipelineRunName, err := c.requestPipelineRun(*pj, name)
 		if err != nil {
 			return fmt.Errorf("posting pipeline: %v", err)
 		}
@@ -660,15 +648,7 @@ func makePipelineRun(pj prowjobv1.ProwJob, pipelineID string) (*pipelinev1alpha1
 
 // GetBuildID calls out to `tot` in order
 // to vend build identifier for the job
-func requestPipelineRun(repo, revision, branch, context, prowjobName string) (string, error) {
-	if repo == "" {
-		return "", fmt.Errorf("not git URL found to request pipeline")
-	}
-	var err error
-	gitURL, err := url.Parse(repo)
-	if err != nil {
-		return "", fmt.Errorf("invalid git URL url: %v", err)
-	}
+func (c *controller) requestPipelineRun(pj prowjobv1.ProwJob, prowjobName string) (string, error) {
 	pipelineURL, err := url.Parse("http://pipelinerunner")
 	if err != nil {
 		return "", fmt.Errorf("invalid pipelinerunner url: %v", err)
@@ -678,21 +658,17 @@ func requestPipelineRun(repo, revision, branch, context, prowjobName string) (st
 	labels[prowJobName] = prowjobName
 	labels[kube.CreatedByProw] = "true"
 
-	o := piplelineRunOptions{
-		GitUrl:   gitURL.String(),
-		Branch:   branch,
-		Revision: revision,
-		Context:  context,
-		Labels:   labels,
+	payload := PipelineRunRequest{
+		Labels:      labels,
+		ProwJobSpec: pj.Spec,
 	}
 
-	jsonValue, _ := json.Marshal(o)
+	jsonValue, _ := json.Marshal(payload)
 	req, err := http.NewRequest("POST", pipelineURL.String(), bytes.NewBuffer(jsonValue))
 	req.Header.Set("Content-Type", "application/json")
 
 	client := http.DefaultClient
 	resp, err := client.Do(req)
-
 	if err != nil {
 		return "", fmt.Errorf("posting pipelinerunner: %v", err)
 	}
