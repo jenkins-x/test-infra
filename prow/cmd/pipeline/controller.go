@@ -302,6 +302,7 @@ type reconciler interface {
 	getPipelineRunWithSelector(context, namespace, selector string) (*pipelinev1alpha1.PipelineRun, error)
 	deletePipelineRun(context, namespace, name string) error
 	createPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) (*pipelinev1alpha1.PipelineRun, error)
+	createPipelineResource(context, namespace string, b *pipelinev1alpha1.PipelineResource) (*pipelinev1alpha1.PipelineResource, error)
 	updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, error)
 	now() metav1.Time
 	pipelineID(prowjobv1.ProwJob) (string, error)
@@ -364,6 +365,16 @@ func (c *controller) createPipelineRun(context, namespace string, b *pipelinev1a
 	}
 	return bc.client.TektonV1alpha1().PipelineRuns(namespace).Create(b)
 }
+
+func (c *controller) createPipelineResource(context, namespace string, pr *pipelinev1alpha1.PipelineResource) (*pipelinev1alpha1.PipelineResource, error) {
+	logrus.Debugf("createPipelineResource(%s,%s,%s)", context, namespace, pr.Name)
+	bc, ok := c.pipelines[context]
+	if !ok {
+		return nil, errors.New("context not found")
+	}
+	return bc.client.TektonV1alpha1().PipelineResources(namespace).Create(pr)
+}
+
 func (c *controller) now() metav1.Time {
 	return metav1.Now()
 }
@@ -411,6 +422,7 @@ func reconcile(c reconciler, key string) error {
 	var reported bool
 	var pj *prowjobv1.ProwJob
 	var p *pipelinev1alpha1.PipelineRun
+	var pr *pipelinev1alpha1.PipelineResource
 
 	switch kind {
 	// if this is a pipelinerun then get the prowjobname from a label, also use the name in the key to lookup pipelinerun
@@ -513,12 +525,17 @@ func reconcile(c reconciler, key string) error {
 		if err != nil {
 			return fmt.Errorf("failed to get pipeline id: %v", err)
 		}
-		if p, err = makePipelineRun(*pj, id); err != nil {
+
+		if p, pr, err = makePipelineRun(*pj, id); err != nil {
 			return fmt.Errorf("make pipeline: %v", err)
 		}
-		logrus.Infof("Create pipelines/%s", key)
+		logrus.Infof("Create pipeline resource/%s", key)
+		if pr, err = c.createPipelineResource(ctx, namespace, pr); err != nil {
+			return fmt.Errorf("create pipelineresource: %v", err)
+		}
+		logrus.Infof("Create pipelinerun/%s", key)
 		if p, err = c.createPipelineRun(ctx, namespace, p); err != nil {
-			return fmt.Errorf("create pipeline: %v", err)
+			return fmt.Errorf("create pipelinerun: %v", err)
 		}
 	}
 
@@ -628,22 +645,62 @@ func defaultEnv(c *untypedcorev1.Container, rawEnv map[string]string) {
 }
 
 // makePipeline creates a pipeline from the prowjob, using the prowjob's pipelinespec.
-func makePipelineRun(pj prowjobv1.ProwJob, pipelineID string) (*pipelinev1alpha1.PipelineRun, error) {
+func makePipelineRun(pj prowjobv1.ProwJob, buildID string) (*pipelinev1alpha1.PipelineRun, *pipelinev1alpha1.PipelineResource, error) {
 	if pj.Spec.PipelineRunSpec == nil {
-		return nil, errors.New("nil PipelineSpec")
+		return nil, nil, errors.New("nil PipelineSpec")
 	}
 	p := pipelinev1alpha1.PipelineRun{
 		ObjectMeta: pipelineMeta(pj),
 		Spec:       *pj.Spec.PipelineRunSpec,
 	}
 
-	// todo JR create a PipelineResource
-	//err = injectSource(&p, pj)
-
 	// todo JR add envars?
 	//injectEnvironment(&p, rawEnv)
 
-	return &p, nil
+	// todo add in build id env var
+	resourceBinding := pipelinev1alpha1.PipelineResourceBinding{
+		// todo can we inject the build id here so that we get it in env vars on the steps???
+	}
+	p.Spec.Resources = append(p.Spec.Resources, resourceBinding)
+
+	// todo this is github specific, lets figure out the correct git provider?
+	sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
+
+	var revision string
+
+	// todo lets support batches of PRs
+	if len(pj.Spec.Refs.Pulls) > 0 {
+		revision = pj.Spec.Refs.Pulls[0].SHA
+	} else {
+		revision = pj.Spec.Refs.BaseSHA
+	}
+
+	pr := pipelinev1alpha1.PipelineResource{
+		ObjectMeta: pipelineMeta(pj),
+		Spec: pipelinev1alpha1.PipelineResourceSpec{
+			Type: pipelinev1alpha1.PipelineResourceTypeGit,
+			Params: []pipelinev1alpha1.Param{
+				{
+					Name:  "source",
+					Value: sourceURL,
+				},
+				{
+					Name:  "revision",
+					Value: revision,
+				},
+				{
+					Name:  "build_id",
+					Value: buildID,
+				},
+			},
+		},
+	}
+	pr.ObjectMeta.OwnerReferences = pj.OwnerReferences
+
+	// todo JR hack let's figure out a way to update the pipelnerun and tasks with the correct resource name
+	pr.Name = "example-source"
+
+	return &p, &pr, nil
 }
 
 // GetBuildID calls out to `tot` in order
