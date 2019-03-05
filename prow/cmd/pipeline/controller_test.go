@@ -19,6 +19,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"testing"
+
 	pipelinev1alpha1 "github.com/knative/build-pipeline/pkg/apis/pipeline/v1alpha1"
 	duckv1alpha1 "github.com/knative/pkg/apis/duck/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,8 +29,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
-	"reflect"
-	"testing"
 
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/kube"
@@ -134,6 +135,14 @@ func (r *fakeReconciler) pipelineID(pj prowjobv1.ProwJob) (string, error) {
 	return "7777777777", nil
 }
 
+func (r *fakeReconciler) createPipelineResource(context, namespace string, pr *pipelinev1alpha1.PipelineResource) (*pipelinev1alpha1.PipelineResource, error) {
+	return nil, nil
+}
+
+func (r *fakeReconciler) requestPipelineRun(pj prowjobv1.ProwJob, prowjobName string) (string, error) {
+	return "", nil
+}
+
 type fakeLimiter struct {
 	added string
 }
@@ -237,7 +246,7 @@ func TestReconcile(t *testing.T) {
 		},
 		expectedPipelineRun: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
 			pj.Spec.Type = prowjobv1.PeriodicJob
-			b, err := makePipelineRun(pj, "50")
+			b, _, err := makePipelineRun(pj, "50")
 			if err != nil {
 				panic(err)
 			}
@@ -289,7 +298,7 @@ func TestReconcile(t *testing.T) {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
-				b, err := makePipelineRun(pj, "7")
+				b, _, err := makePipelineRun(pj, "7")
 				if err != nil {
 					panic(err)
 				}
@@ -302,7 +311,7 @@ func TestReconcile(t *testing.T) {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
-				b, err := makePipelineRun(pj, "6")
+				b, _, err := makePipelineRun(pj, "6")
 				b.DeletionTimestamp = &now
 				if err != nil {
 					panic(err)
@@ -317,7 +326,7 @@ func TestReconcile(t *testing.T) {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
-				b, err := makePipelineRun(pj, "9999")
+				b, _, err := makePipelineRun(pj, "9999")
 				if err != nil {
 					panic(err)
 				}
@@ -348,7 +357,7 @@ func TestReconcile(t *testing.T) {
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
-				b, err := makePipelineRun(pj, "5")
+				b, _, err := makePipelineRun(pj, "5")
 				if err != nil {
 					panic(err)
 				}
@@ -378,7 +387,7 @@ func TestReconcile(t *testing.T) {
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
-				b, err := makePipelineRun(pj, "5")
+				b, _, err := makePipelineRun(pj, "5")
 				if err != nil {
 					panic(err)
 				}
@@ -408,7 +417,7 @@ func TestReconcile(t *testing.T) {
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
-				b, err := makePipelineRun(pj, "5")
+				b, _, err := makePipelineRun(pj, "5")
 				if err != nil {
 					panic(err)
 				}
@@ -438,7 +447,7 @@ func TestReconcile(t *testing.T) {
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
-				b, err := makePipelineRun(pj, "1")
+				b, _, err := makePipelineRun(pj, "1")
 				if err != nil {
 					panic(err)
 				}
@@ -475,7 +484,7 @@ func TestReconcile(t *testing.T) {
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
-				b, err := makePipelineRun(pj, "22")
+				b, _, err := makePipelineRun(pj, "22")
 				if err != nil {
 					panic(err)
 				}
@@ -514,7 +523,7 @@ func TestReconcile(t *testing.T) {
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
-				b, err := makePipelineRun(pj, "21")
+				b, _, err := makePipelineRun(pj, "21")
 				if err != nil {
 					panic(err)
 				}
@@ -560,7 +569,7 @@ func TestReconcile(t *testing.T) {
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
-				b, err := makePipelineRun(pj, "-72")
+				b, _, err := makePipelineRun(pj, "-72")
 				if err != nil {
 					panic(err)
 				}
@@ -580,7 +589,7 @@ func TestReconcile(t *testing.T) {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{}
-				b, err := makePipelineRun(pj, "44")
+				b, _, err := makePipelineRun(pj, "44")
 				if err != nil {
 					panic(err)
 				}
@@ -638,7 +647,7 @@ func TestReconcile(t *testing.T) {
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
 				pj.Spec.PipelineRunSpec = &pipelineSpec
-				b, err := makePipelineRun(pj, "42")
+				b, _, err := makePipelineRun(pj, "42")
 				if err != nil {
 					panic(err)
 				}
@@ -840,7 +849,7 @@ func TestMakePipelineRun(t *testing.T) {
 				pj = tc.job(pj)
 			}
 			const randomPipelineRunID = "so-many-pipelines"
-			actual, err := makePipelineRun(pj, randomPipelineRunID)
+			actual, _, err := makePipelineRun(pj, randomPipelineRunID)
 			if err != nil {
 				if !tc.err {
 					t.Errorf("unexpected error: %v", err)
