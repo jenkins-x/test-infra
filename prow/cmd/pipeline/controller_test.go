@@ -59,6 +59,7 @@ const fakePJCtx = "prow-context"
 const fakePJNS = "prow-job"
 
 func (r *fakeReconciler) getProwJob(name string) (*prowjobv1.ProwJob, error) {
+	logrus.Debugf("getProwJob: name=%s", name)
 	if name == errorGetProwJob {
 		return nil, errors.New("injected get prowjob error")
 	}
@@ -71,6 +72,7 @@ func (r *fakeReconciler) getProwJob(name string) (*prowjobv1.ProwJob, error) {
 }
 
 func (r *fakeReconciler) updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, error) {
+	logrus.Debugf("updateProwJob: name=%s", pj.GetName())
 	if pj.Name == errorUpdateProwJob {
 		return nil, errors.New("injected update prowjob error")
 	}
@@ -86,6 +88,7 @@ func (r *fakeReconciler) updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJo
 }
 
 func (r *fakeReconciler) getPipelineRun(context, namespace, name string) (*pipelinev1alpha1.PipelineRun, error) {
+	logrus.Debugf("getPipelineRun: ctx=%s, ns=%s, name=%s", context, namespace, name)
 	if namespace == errorGetPipelineRun {
 		return nil, errors.New("injected create pipeline error")
 	}
@@ -97,6 +100,7 @@ func (r *fakeReconciler) getPipelineRun(context, namespace, name string) (*pipel
 	return &b, nil
 }
 func (r *fakeReconciler) deletePipelineRun(context, namespace, name string) error {
+	logrus.Debugf("deletePipelineRun: ctx=%s, ns=%s, name=%s", context, namespace, name)
 	if namespace == errorDeletePipelineRun {
 		return errors.New("injected create pipeline error")
 	}
@@ -109,6 +113,7 @@ func (r *fakeReconciler) deletePipelineRun(context, namespace, name string) erro
 }
 
 func (r *fakeReconciler) createPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) (*pipelinev1alpha1.PipelineRun, error) {
+	logrus.Debugf("createPipelineRun: ctx=%s, ns=%s", context, namespace)
 	if b == nil {
 		return nil, errors.New("nil pipeline")
 	}
@@ -137,16 +142,29 @@ func (r *fakeReconciler) pipelineID(pj prowjobv1.ProwJob) (string, error) {
 }
 
 func (r *fakeReconciler) createPipelineResource(context, namespace string, pr *pipelinev1alpha1.PipelineResource) (*pipelinev1alpha1.PipelineResource, error) {
+	logrus.Debugf("createPipelineResource: ctx=%s, ns=%s, name=%s", context, namespace, pr.GetName())
 	return pr, nil
 }
 
 func (r *fakeReconciler) requestPipelineRun(context, namespace string, pj prowjobv1.ProwJob) (string, error) {
-	p, _, err := makePipelineRun(pj, "50")
+	logrus.Debugf("requestPipelineRun: ctx=%s, ns=%s, pj=%s", context, namespace, pj.GetName())
+	p, _, err := makePipelineRun(pj, "1")
 	if err != nil {
 		return "", err
 	}
-	_, err = r.createPipelineRun(context, namespace, p)
-	return p.GetName(), err
+	if p == nil {
+		return "", errors.New("nil pipeline")
+	}
+	if namespace == errorCreatePipelineRun {
+		return "", errors.New("injected request pipeline error")
+	}
+	k := toKey(context, namespace, p.Name, pipelineRun)
+	rp, ok := r.pipelines[k]
+	if ok {
+		return rp.Name, nil
+	}
+	r.pipelines[k] = *p
+	return p.Name, nil
 }
 
 type fakeLimiter struct {
@@ -311,6 +329,7 @@ func TestReconcile(t *testing.T) {
 				}
 				return b
 			}(),
+			err: true,
 		},
 		{
 			name: "do not delete deleted pipelines",
@@ -326,6 +345,7 @@ func TestReconcile(t *testing.T) {
 				return b
 			}(),
 			expectedPipelineRun: noPipelineRunChange,
+			err:                 true,
 		},
 		{
 			name: "only delete pipelines created by controller",
@@ -341,6 +361,7 @@ func TestReconcile(t *testing.T) {
 				return b
 			}(),
 			expectedPipelineRun: noPipelineRunChange,
+			err:                 true,
 		},
 		{
 			name:    "delete prow pipelines in the wrong cluster",
@@ -370,7 +391,8 @@ func TestReconcile(t *testing.T) {
 				}
 				return b
 			}(),
-			expectedJob: noJobChange,
+			expectedJob:         noJobChange,
+			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
 			name:    "ignore random pipelines in the wrong cluster",
@@ -423,7 +445,9 @@ func TestReconcile(t *testing.T) {
 				pj := prowjobv1.ProwJob{}
 				pj.Spec.Type = prowjobv1.PeriodicJob
 				pj.Spec.Agent = prowjobv1.TektonAgent
-				pj.Spec.PipelineRunSpec = &pipelineSpec
+				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{
+					ServiceAccount: "robot",
+				}
 				b, _, err := makePipelineRun(pj, "5")
 				if err != nil {
 					panic(err)
@@ -438,14 +462,14 @@ func TestReconcile(t *testing.T) {
 			expectedPipelineRun: noPipelineRunChange,
 		},
 		{
-			name: "prowjob goes pending when pipeline starts",
+			name: "prowjob goes triggered  when pipeline starts",
 			observedJob: &prowjobv1.ProwJob{
 				Spec: prowjobv1.ProwJobSpec{
 					Agent:           prowjobv1.TektonAgent,
 					PipelineRunSpec: &pipelineSpec,
 				},
 				Status: prowjobv1.ProwJobStatus{
-					State:       prowjobv1.TriggeredState,
+					State:       prowjobv1.PendingState,
 					Description: "fancy",
 				},
 			},
@@ -459,7 +483,7 @@ func TestReconcile(t *testing.T) {
 					panic(err)
 				}
 				b.Status.SetCondition(&duckv1alpha1.Condition{
-					Type:    duckv1alpha1.ConditionSucceeded,
+					Type:    duckv1alpha1.ConditionReady,
 					Message: "hello",
 				})
 				return b
@@ -467,8 +491,8 @@ func TestReconcile(t *testing.T) {
 			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status = prowjobv1.ProwJobStatus{
 					StartTime:   now,
-					State:       prowjobv1.PendingState,
-					Description: "hello",
+					State:       prowjobv1.TriggeredState,
+					Description: "scheduling",
 				}
 				return pj
 			},
@@ -676,31 +700,37 @@ func TestReconcile(t *testing.T) {
 			} else if tc.namespace == errorUpdateProwJob {
 				name = errorUpdateProwJob
 			}
-			bk := toKey(tc.context, tc.namespace, name, prowJob)
-			jk := toKey(fakePJCtx, fakePJNS, name, prowJob)
+
 			r := &fakeReconciler{
 				jobs:      map[string]prowjobv1.ProwJob{},
 				pipelines: map[string]pipelinev1alpha1.PipelineRun{},
 				nows:      now,
 			}
+
+			jk := toKey(fakePJCtx, fakePJNS, name, prowJob)
 			if j := tc.observedJob; j != nil {
 				j.Name = name
 				j.Spec.Type = prowjobv1.PeriodicJob
 				r.jobs[jk] = *j
 			}
-			if b := tc.observedPipelineRun; b != nil {
-				b.Name = name
-				r.pipelines[bk] = *b
+			pk := toKey(tc.context, tc.namespace, name, pipelineRun)
+			if p := tc.observedPipelineRun; p != nil {
+				p.Name = name
+				p.Labels[kube.ProwJobIDLabel] = name
+				r.pipelines[pk] = *p
 			}
+
 			expectedJobs := map[string]prowjobv1.ProwJob{}
 			if j := tc.expectedJob; j != nil {
-				expectedJobs[jk] = j(r.jobs[jk], r.pipelines[bk])
+				expectedJobs[jk] = j(r.jobs[jk], r.pipelines[pk])
 			}
 			expectedPipelineRuns := map[string]pipelinev1alpha1.PipelineRun{}
-			if b := tc.expectedPipelineRun; b != nil {
-				expectedPipelineRuns[bk] = b(r.jobs[jk], r.pipelines[bk])
+			if p := tc.expectedPipelineRun; p != nil {
+				expectedPipelineRuns[pk] = p(r.jobs[jk], r.pipelines[pk])
 			}
-			err := reconcile(r, bk)
+
+			tk := toKey(tc.context, tc.namespace, name, prowJob)
+			err := reconcile(r, tk)
 			switch {
 			case err != nil:
 				if !tc.err {
