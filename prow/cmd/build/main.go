@@ -120,6 +120,7 @@ func contextConfigs(kubeconfig, buildCluster string) (map[string]rest.Config, st
 		logrus.Warnf("Failed to create in-cluster config: %v", err)
 	} else {
 		defCtx = new(string)
+		*defCtx = kube.DefaultClusterAlias
 		logrus.Info("* in-cluster")
 		configs[*defCtx] = *localCfg
 	}

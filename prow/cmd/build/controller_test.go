@@ -993,6 +993,15 @@ func TestMakeBuild(t *testing.T) {
 				ObjectMeta: buildMeta(pj),
 				Spec:       *pj.Spec.BuildSpec,
 			}
+			if pj.Spec.DecorationConfig == nil {
+				expected.Spec.Timeout = &metav1.Duration{Duration: time.Hour}
+			} else {
+				if pj.Spec.DecorationConfig.Timeout == 0 {
+					expected.Spec.Timeout = &metav1.Duration{Duration: time.Hour}
+				} else {
+					expected.Spec.Timeout = &metav1.Duration{Duration: pj.Spec.DecorationConfig.Timeout}
+				}
+			}
 			env, err := buildEnv(pj, randomBuildID)
 			if err != nil {
 				t.Fatalf("failed to create expected build env: %v", err)
