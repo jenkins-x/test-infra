@@ -24,6 +24,7 @@ import (
 
 	pipelinev1alpha1 "github.com/knative/build-pipeline/pkg/apis/pipeline/v1alpha1"
 	duckv1alpha1 "github.com/knative/pkg/apis/duck/v1alpha1"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -136,11 +137,16 @@ func (r *fakeReconciler) pipelineID(pj prowjobv1.ProwJob) (string, error) {
 }
 
 func (r *fakeReconciler) createPipelineResource(context, namespace string, pr *pipelinev1alpha1.PipelineResource) (*pipelinev1alpha1.PipelineResource, error) {
-	return nil, nil
+	return pr, nil
 }
 
-func (r *fakeReconciler) requestPipelineRun(pj prowjobv1.ProwJob, prowjobName string) (string, error) {
-	return "", nil
+func (r *fakeReconciler) requestPipelineRun(context, namespace string, pj prowjobv1.ProwJob) (string, error) {
+	p, _, err := makePipelineRun(pj, "50")
+	if err != nil {
+		return "", err
+	}
+	_, err = r.createPipelineRun(context, namespace, p)
+	return p.GetName(), err
 }
 
 type fakeLimiter struct {
@@ -211,6 +217,7 @@ func TestEnqueueKey(t *testing.T) {
 }
 
 func TestReconcile(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	now := metav1.Now()
 	pipelineSpec := pipelinev1alpha1.PipelineRunSpec{}
 	noJobChange := func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
@@ -862,6 +869,8 @@ func TestMakePipelineRun(t *testing.T) {
 				ObjectMeta: pipelineMeta(pj),
 				Spec:       *pj.Spec.PipelineRunSpec,
 			}
+			resourceBinding := pipelinev1alpha1.PipelineResourceBinding{}
+			expected.Spec.Resources = append(expected.Spec.Resources, resourceBinding)
 
 			if err != nil {
 				t.Fatalf("failed to inject expected source: %v", err)
@@ -956,7 +965,7 @@ func TestProwJobStatus(t *testing.T) {
 			fallback: descFailed,
 		},
 		{
-			name: "unstarted job returns triggered/initializing",
+			name: "unstarted job returns pending/running",
 			input: pipelinev1alpha1.PipelineRunStatus{
 				Conditions: []duckv1alpha1.Condition{
 					{
@@ -966,9 +975,9 @@ func TestProwJobStatus(t *testing.T) {
 					},
 				},
 			},
-			state:    prowjobv1.TriggeredState,
+			state:    prowjobv1.PendingState,
 			desc:     "hola",
-			fallback: descInitializing,
+			fallback: descRunning,
 		},
 		{
 			name: "unfinished job returns running",
@@ -1001,10 +1010,10 @@ func TestProwJobStatus(t *testing.T) {
 			fallback: descRunning,
 		},
 		{
-			name:  "completed pipelines without a succeeded condition end in error",
+			name:  "completed pipelines without a succeeded condition end in tirggered/scheduling",
 			input: pipelinev1alpha1.PipelineRunStatus{},
-			state: prowjobv1.ErrorState,
-			desc:  descMissingCondition,
+			state: prowjobv1.TriggeredState,
+			desc:  descScheduling,
 		},
 	}
 
