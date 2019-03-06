@@ -416,10 +416,10 @@ func reconcile(c reconciler, key string) error {
 
 	// todo JR - need to nil out contexts to run on Jenkins X as default context is the same
 	ctx = *new(string)
+	// todo JR maybe we can combine this with wantPipelineRun or havePipelineRun above but this seems safer for now
 	var wantPipelineRun bool
 	var havePipelineRun bool
-	// todo JR maybe we can combine this with wantPipelineRun or havePipelineRun above but this seems safer for now
-	var reported bool
+
 	var pj *prowjobv1.ProwJob
 	var p *pipelinev1alpha1.PipelineRun
 	var pr *pipelinev1alpha1.PipelineResource
@@ -464,13 +464,6 @@ func reconcile(c reconciler, key string) error {
 		if pj == nil {
 			return fmt.Errorf("no prowjob found")
 		}
-		status := &pj.Status
-		//add extra check as there is a delay for pipelinerun objects being created and we can get a watch event here
-		//that updates the prowjob with the reporter status and still not have a pipelinerun which causes a duplicate
-		//pipelinerun being requested
-		if status != nil && status.PrevReportStates != nil && (status.PrevReportStates["github-reporter"] == kube.TriggeredState) {
-			reported = true
-		}
 
 		selector := fmt.Sprintf("%s = %s", prowJobName, name)
 		p, err = c.getPipelineRunWithSelector(ctx, namespace, selector)
@@ -506,7 +499,7 @@ func reconcile(c reconciler, key string) error {
 	case finalState(pj.Status.State):
 		logrus.Infof("Observed finished %s", key)
 		return nil
-	case wantPipelineRun && !havePipelineRun && !reported && (pj.Spec.PipelineRunSpec == nil || pj.Spec.PipelineRunSpec.PipelineRef.Name == ""):
+	case wantPipelineRun && !havePipelineRun && (pj.Spec.PipelineRunSpec == nil || pj.Spec.PipelineRunSpec.PipelineRef.Name == ""):
 		// lets POST to Jenkins X pipeline runner
 		pipelineRunName, err := c.requestPipelineRun(*pj, name)
 		if err != nil {
@@ -518,7 +511,7 @@ func reconcile(c reconciler, key string) error {
 			return fmt.Errorf("finding pipeline %s: %v", name, err)
 		}
 
-	case wantPipelineRun && !reported && !havePipelineRun:
+	case wantPipelineRun && !havePipelineRun:
 
 		logrus.Info("using embedded pipelinerun spec")
 		id, err := c.pipelineID(*pj)
