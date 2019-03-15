@@ -287,9 +287,9 @@ func (c *controller) enqueueKey(ctx string, obj interface{}) {
 		if ns == "" {
 			ns = o.Namespace
 		}
-		c.workqueue.AddRateLimited(toKey(ctx, ns, o.Name, "ProwJob"))
+		c.workqueue.AddRateLimited(toKey(ctx, ns, o.Name, prowJob))
 	case *pipelinev1alpha1.PipelineRun:
-		c.workqueue.AddRateLimited(toKey(ctx, o.Namespace, o.Name, "PipelineRun"))
+		c.workqueue.AddRateLimited(toKey(ctx, o.Namespace, o.Name, pipelineRun))
 	default:
 		logrus.Warnf("cannot enqueue unknown type %T: %v", o, obj)
 		return
@@ -306,7 +306,20 @@ type reconciler interface {
 	updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, error)
 	now() metav1.Time
 	pipelineID(prowjobv1.ProwJob) (string, error)
-	requestPipelineRun(prowjobv1.ProwJob) (string, error)
+	requestPipelineRun(context, namespace string, pj prowjobv1.ProwJob) (string, error)
+}
+
+func (c *controller) getPipelineConfig(ctx string) (pipelineConfig, error) {
+	cfg, ok := c.pipelines[ctx]
+	if !ok {
+		defaultCtx := kube.DefaultClusterAlias
+		defaultCfg, ok := c.pipelines[defaultCtx]
+		if !ok {
+			return pipelineConfig{}, fmt.Errorf("no cluster configuration found for default context %q", defaultCtx)
+		}
+		return defaultCfg, nil
+	}
+	return cfg, nil
 }
 
 func (c *controller) getProwJob(name string) (*prowjobv1.ProwJob, error) {
@@ -319,24 +332,24 @@ func (c *controller) updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, e
 }
 
 func (c *controller) getPipelineRun(context, namespace, name string) (*pipelinev1alpha1.PipelineRun, error) {
-	b, ok := c.pipelines[context]
-	if !ok {
-		return nil, errors.New("context not found")
+	p, err := c.getPipelineConfig(context)
+	if err != nil {
+		return nil, err
 	}
-	return b.informer.Lister().PipelineRuns(namespace).Get(name)
+	return p.informer.Lister().PipelineRuns(namespace).Get(name)
 }
 
 func (c *controller) getPipelineRunWithSelector(context, namespace, selector string) (*pipelinev1alpha1.PipelineRun, error) {
-	b, ok := c.pipelines[context]
-	if !ok {
-		return nil, errors.New("context not found")
+	p, err := c.getPipelineConfig(context)
+	if err != nil {
+		return nil, err
 	}
 
 	label, err := labels.Parse(selector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse selector %s", selector)
 	}
-	runs, err := b.informer.Lister().PipelineRuns(namespace).List(label)
+	runs, err := p.informer.Lister().PipelineRuns(namespace).List(label)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pipelineruns with label %s", label.String())
 	}
@@ -351,28 +364,28 @@ func (c *controller) getPipelineRunWithSelector(context, namespace, selector str
 
 func (c *controller) deletePipelineRun(context, namespace, name string) error {
 	logrus.Debugf("deletePipeline(%s,%s,%s)", context, namespace, name)
-	b, ok := c.pipelines[context]
-	if !ok {
-		return errors.New("context not found")
+	p, err := c.getPipelineConfig(context)
+	if err != nil {
+		return err
 	}
-	return b.client.TektonV1alpha1().PipelineRuns(namespace).Delete(name, &metav1.DeleteOptions{})
+	return p.client.TektonV1alpha1().PipelineRuns(namespace).Delete(name, &metav1.DeleteOptions{})
 }
 func (c *controller) createPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) (*pipelinev1alpha1.PipelineRun, error) {
 	logrus.Debugf("createPipelineRun(%s,%s,%s)", context, namespace, b.Name)
-	bc, ok := c.pipelines[context]
-	if !ok {
-		return nil, errors.New("context not found")
+	p, err := c.getPipelineConfig(context)
+	if err != nil {
+		return nil, err
 	}
-	return bc.client.TektonV1alpha1().PipelineRuns(namespace).Create(b)
+	return p.client.TektonV1alpha1().PipelineRuns(namespace).Create(b)
 }
 
 func (c *controller) createPipelineResource(context, namespace string, pr *pipelinev1alpha1.PipelineResource) (*pipelinev1alpha1.PipelineResource, error) {
 	logrus.Debugf("createPipelineResource(%s,%s,%s)", context, namespace, pr.Name)
-	bc, ok := c.pipelines[context]
-	if !ok {
-		return nil, errors.New("context not found")
+	p, err := c.getPipelineConfig(context)
+	if err != nil {
+		return nil, err
 	}
-	return bc.client.TektonV1alpha1().PipelineResources(namespace).Create(pr)
+	return p.client.TektonV1alpha1().PipelineResources(namespace).Create(pr)
 }
 
 func (c *controller) now() metav1.Time {
@@ -407,6 +420,7 @@ var (
 // reconcile ensures a knative-pipeline prowjob has a corresponding pipeline, updating the prowjob's status as the pipeline progresses.
 func reconcile(c reconciler, key string) error {
 
+	logrus.Debugf("reconcile: %s\n", key)
 	// if pipelinerun and prowjob name are different we will need to lookup the prowjob name from the pipelinerun label
 	ctx, namespace, name, kind, err := fromKey(key)
 	if err != nil {
@@ -414,8 +428,6 @@ func reconcile(c reconciler, key string) error {
 		return nil
 	}
 
-	// todo JR - need to nil out contexts to run on Jenkins X as default context is the same
-	ctx = *new(string)
 	var wantPipelineRun bool
 	var havePipelineRun bool
 	// todo JR maybe we can combine this with wantPipelineRun or havePipelineRun above but this seems safer for now
@@ -457,6 +469,10 @@ func reconcile(c reconciler, key string) error {
 			return fmt.Errorf("get prowjob: %v", err)
 		case pj.Spec.Agent != prowjobv1.TektonAgent:
 			// Do not want a pipeline for this job
+		case pj.Spec.Cluster != ctx:
+			// need to disable this check as having issues when default current context is empty
+			// Build is in wrong cluster, we do not want this build
+			logrus.Warnf("%s found in context %s not %s", key, ctx, pj.Spec.Cluster)
 		case pj.DeletionTimestamp == nil:
 			wantPipelineRun = true
 		}
@@ -508,7 +524,7 @@ func reconcile(c reconciler, key string) error {
 		return nil
 	case wantPipelineRun && !havePipelineRun && !reported && (pj.Spec.PipelineRunSpec == nil || pj.Spec.PipelineRunSpec.PipelineRef.Name == ""):
 		// lets POST to Jenkins X pipeline runner
-		pipelineRunName, err := c.requestPipelineRun(*pj)
+		pipelineRunName, err := c.requestPipelineRun(ctx, namespace, *pj)
 		if err != nil {
 			return fmt.Errorf("posting pipeline: %v", err)
 		}
@@ -519,7 +535,6 @@ func reconcile(c reconciler, key string) error {
 		}
 
 	case wantPipelineRun && !reported && !havePipelineRun:
-
 		logrus.Info("using embedded pipelinerun spec")
 		id, err := c.pipelineID(*pj)
 		if err != nil {
@@ -664,15 +679,17 @@ func makePipelineRun(pj prowjobv1.ProwJob, buildID string) (*pipelinev1alpha1.Pi
 	p.Spec.Resources = append(p.Spec.Resources, resourceBinding)
 
 	// todo this is github specific, is there a way to figure out the correct git provider?
-	sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
+	sourceURL := ""
+	revision := ""
+	if pj.Spec.Refs != nil {
+		sourceURL = fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
 
-	var revision string
-
-	// todo lets support batches of PRs
-	if len(pj.Spec.Refs.Pulls) > 0 {
-		revision = pj.Spec.Refs.Pulls[0].SHA
-	} else {
-		revision = pj.Spec.Refs.BaseSHA
+		// todo lets support batches of PRs
+		if len(pj.Spec.Refs.Pulls) > 0 {
+			revision = pj.Spec.Refs.Pulls[0].SHA
+		} else {
+			revision = pj.Spec.Refs.BaseSHA
+		}
 	}
 
 	pr := pipelinev1alpha1.PipelineResource{
@@ -705,7 +722,7 @@ func makePipelineRun(pj prowjobv1.ProwJob, buildID string) (*pipelinev1alpha1.Pi
 
 // GetBuildID calls out to `tot` in order
 // to vend build identifier for the job
-func (c *controller) requestPipelineRun(pj prowjobv1.ProwJob) (string, error) {
+func (c *controller) requestPipelineRun(context, namespace string, pj prowjobv1.ProwJob) (string, error) {
 	pipelineURL, err := url.Parse("http://pipelinerunner")
 	if err != nil {
 		return "", fmt.Errorf("invalid pipelinerunner url: %v", err)

@@ -634,6 +634,8 @@ func TestDividePool(t *testing.T) {
 }
 
 func TestPickBatch(t *testing.T) {
+	//TODO enable this when batch functionality is implemented
+	t.Skip("Skipping because batch jobs are not supported by the knative build")
 	lg, gc, err := localgit.New()
 	if err != nil {
 		t.Fatalf("Error making local git: %v", err)
@@ -773,6 +775,8 @@ func (c *fkc) CreateProwJob(pj kube.ProwJob) (kube.ProwJob, error) {
 }
 
 func TestTakeAction(t *testing.T) {
+	//TODO enable this when batch functionality is implemented
+	t.Skip("Skipping because batch jobs are not supported by the knative build")
 	// PRs 0-9 exist. All are mergable, and all are passing tests.
 	testcases := []struct {
 		name string
