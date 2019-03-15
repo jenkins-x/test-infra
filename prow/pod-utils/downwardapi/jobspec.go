@@ -171,6 +171,9 @@ func EnvForType(jobType kube.ProwJobType) []string {
 
 // GetBranch returns the source code branch
 func GetBranch(spec JobSpec) string {
+	if spec.Refs == nil {
+		return "master"
+	}
 	branch := spec.Refs.BaseRef
 	if spec.Type == kube.PostsubmitJob || spec.Type == kube.BatchJob {
 		return branch
