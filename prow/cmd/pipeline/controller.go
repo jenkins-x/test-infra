@@ -306,7 +306,7 @@ type reconciler interface {
 	updateProwJob(pj *prowjobv1.ProwJob) (*prowjobv1.ProwJob, error)
 	now() metav1.Time
 	pipelineID(prowjobv1.ProwJob) (string, error)
-	requestPipelineRun(prowjobv1.ProwJob, string) (string, error)
+	requestPipelineRun(prowjobv1.ProwJob) (string, error)
 }
 
 func (c *controller) getProwJob(name string) (*prowjobv1.ProwJob, error) {
@@ -462,13 +462,13 @@ func reconcile(c reconciler, key string) error {
 		}
 		//make pointer so we can compare with nil
 		if pj == nil {
-			return fmt.Errorf("no prowjob found")
+			return fmt.Errorf("no prowjob found %s", name)
 		}
 		status := &pj.Status
 		//add extra check as there is a delay for pipelinerun objects being created and we can get a watch event here
 		//that updates the prowjob with the reporter status and still not have a pipelinerun which causes a duplicate
 		//pipelinerun being requested
-		if status != nil && status.PrevReportStates != nil && (status.PrevReportStates["github-reporter"] == kube.TriggeredState) {
+		if status != nil && status.PrevReportStates != nil && (status.PrevReportStates["github-reporter"] == kube.PendingState) {
 			reported = true
 		}
 
@@ -508,7 +508,7 @@ func reconcile(c reconciler, key string) error {
 		return nil
 	case wantPipelineRun && !havePipelineRun && !reported && (pj.Spec.PipelineRunSpec == nil || pj.Spec.PipelineRunSpec.PipelineRef.Name == ""):
 		// lets POST to Jenkins X pipeline runner
-		pipelineRunName, err := c.requestPipelineRun(*pj, name)
+		pipelineRunName, err := c.requestPipelineRun(*pj)
 		if err != nil {
 			return fmt.Errorf("posting pipeline: %v", err)
 		}
@@ -557,7 +557,7 @@ func reconcile(c reconciler, key string) error {
 		}
 		npj.Status.State = wantState
 		npj.Status.Description = wantMsg
-		logrus.Infof("Update prowjobs/%s", key)
+		logrus.Infof("Update %s /%s - %s - %v : %s", kind, key, pj.Name, npj.Labels, p.Name)
 		if _, err = c.updateProwJob(npj); err != nil {
 			return fmt.Errorf("update prow status: %v", err)
 		}
@@ -654,7 +654,7 @@ func makePipelineRun(pj prowjobv1.ProwJob, buildID string) (*pipelinev1alpha1.Pi
 		Spec:       *pj.Spec.PipelineRunSpec,
 	}
 
-	// todo JR add envars?
+	// todo JR add envars or perhaps tekton input paramaters?
 	//injectEnvironment(&p, rawEnv)
 
 	// todo add in build id env var
@@ -663,7 +663,7 @@ func makePipelineRun(pj prowjobv1.ProwJob, buildID string) (*pipelinev1alpha1.Pi
 	}
 	p.Spec.Resources = append(p.Spec.Resources, resourceBinding)
 
-	// todo this is github specific, lets figure out the correct git provider?
+	// todo this is github specific, is there a way to figure out the correct git provider?
 	sourceURL := fmt.Sprintf("https://github.com/%s/%s.git", pj.Spec.Refs.Org, pj.Spec.Refs.Repo)
 
 	var revision string
@@ -705,16 +705,15 @@ func makePipelineRun(pj prowjobv1.ProwJob, buildID string) (*pipelinev1alpha1.Pi
 
 // GetBuildID calls out to `tot` in order
 // to vend build identifier for the job
-func (c *controller) requestPipelineRun(pj prowjobv1.ProwJob, prowjobName string) (string, error) {
+func (c *controller) requestPipelineRun(pj prowjobv1.ProwJob) (string, error) {
 	pipelineURL, err := url.Parse("http://pipelinerunner")
 	if err != nil {
 		return "", fmt.Errorf("invalid pipelinerunner url: %v", err)
 	}
 
 	labels := map[string]string{}
-	labels[prowJobName] = prowjobName
+	labels[prowJobName] = pj.Name
 	labels[kube.CreatedByProw] = "true"
-
 	payload := PipelineRunRequest{
 		Labels:      labels,
 		ProwJobSpec: pj.Spec,
