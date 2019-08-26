@@ -48,6 +48,7 @@ type options struct {
 	configPath    string
 	jobConfigPath string
 	pluginConfig  string
+	pluginHelp    bool
 
 	dryRun      bool
 	gracePeriod time.Duration
@@ -76,6 +77,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.configPath, "config-path", "/etc/config/config.yaml", "Path to config.yaml.")
 	fs.StringVar(&o.jobConfigPath, "job-config-path", "", "Path to prow job configs.")
 	fs.StringVar(&o.pluginConfig, "plugin-config", "/etc/plugins/plugins.yaml", "Path to plugin config file.")
+	fs.BoolVar(&o.pluginHelp, "plugin-help", true, "Enable the plugin-help endpoint")
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
 	fs.DurationVar(&o.gracePeriod, "grace-period", 180*time.Second, "On shutdown, try to handle remaining events for the specified duration. ")
@@ -194,8 +196,11 @@ func main() {
 	http.Handle("/metrics", promhttp.Handler())
 	// For /hook, handle a webhook normally.
 	http.Handle("/hook", server)
+
 	// Serve plugin help information from /plugin-help.
-	http.Handle("/plugin-help", pluginhelp.NewHelpAgent(pluginAgent, githubClient))
+	if o.pluginHelp {
+		http.Handle("/plugin-help", pluginhelp.NewHelpAgent(pluginAgent, githubClient))
+	}
 
 	httpServer := &http.Server{Addr: ":" + strconv.Itoa(o.port)}
 
