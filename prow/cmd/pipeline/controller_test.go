@@ -94,6 +94,19 @@ func (r *fakeReconciler) patchProwJob(pj *prowjobv1.ProwJob) error {
 	return err
 }
 
+func (r *fakeReconciler) patchPipelineRun(context, namespace string, pr *pipelinev1alpha1.PipelineRun) error {
+	logrus.Debugf("patchPipelineRun: name=%s", pr.GetName())
+	if pr == nil {
+		return errors.New("nil pipelinerun")
+	}
+	k := toKey(context, namespace, pr.GetName(), pipelineRun)
+	if _, present := r.pipelines[k]; !present {
+		return apierrors.NewNotFound(pipelinev1alpha1.Resource("PipelineRun"), pr.GetName())
+	}
+	r.pipelines[k] = *pr
+	return nil
+}
+
 func (r *fakeReconciler) getPipelineRun(context, namespace, name string) (*pipelinev1alpha1.PipelineRun, error) {
 	logrus.Debugf("getPipelineRun: ctx=%s, ns=%s, name=%s", context, namespace, name)
 	if namespace == errorGetPipelineRun {
@@ -294,14 +307,15 @@ func TestReconcile(t *testing.T) {
 		return p
 	}
 	cases := []struct {
-		name                 string
-		namespace            string
-		context              string
-		observedJob          *prowjobv1.ProwJob
-		observedPipelineRuns []*pipelinev1alpha1.PipelineRun
-		expectedJob          func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob
-		expectedPipelineRun  func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun
-		err                  bool
+		name                   string
+		namespace              string
+		context                string
+		observedJob            *prowjobv1.ProwJob
+		observedPipelineRuns   []*pipelinev1alpha1.PipelineRun
+		expectedJob            func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob
+		expectedPipelineRun    func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun
+		reconcileAndDeleteRuns bool
+		err                    bool
 	}{{
 		name: "new prow job creates pipeline",
 		observedJob: &prowjobv1.ProwJob{
@@ -1016,8 +1030,8 @@ func TestReconcile(t *testing.T) {
 					panic(err)
 				}
 				p.Status.SetCondition(&duckv1alpha1.Condition{
-					Type:    duckv1alpha1.ConditionSucceeded,
-					Status:  corev1.ConditionFalse,
+					Type:   duckv1alpha1.ConditionSucceeded,
+					Status: corev1.ConditionFalse,
 					Message: "Pipeline jx/jenkins-x-jx-pr-5266-images-16 can't be found:pipeline.tekton.dev\n" +
 						"\"jenkins-x-jx-pr-5266-images-16\" not found",
 				})
@@ -1026,12 +1040,16 @@ func TestReconcile(t *testing.T) {
 			}(),
 			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status = prowjobv1.ProwJobStatus{
-					StartTime:      now,
-					State:          prowjobv1.TriggeredState,
+					StartTime: now,
+					State:     prowjobv1.TriggeredState,
 				}
 				return pj
 			},
-			expectedPipelineRun: nil,
+			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
+				p.DeletionTimestamp = &now
+				return p
+			},
+			reconcileAndDeleteRuns: true,
 		},
 		{
 			name: "with successful metapipeline and failed pipeline with race condition",
@@ -1069,8 +1087,8 @@ func TestReconcile(t *testing.T) {
 					panic(err)
 				}
 				execP.Status.SetCondition(&duckv1alpha1.Condition{
-					Type:    duckv1alpha1.ConditionSucceeded,
-					Status:  corev1.ConditionFalse,
+					Type:   duckv1alpha1.ConditionSucceeded,
+					Status: corev1.ConditionFalse,
 					Message: "Pipeline jx/jenkins-x-jx-pr-5266-images-16 can't be found:pipeline.tekton.dev\n" +
 						"\"jenkins-x-jx-pr-5266-images-16\" not found",
 				})
@@ -1079,12 +1097,16 @@ func TestReconcile(t *testing.T) {
 			}(),
 			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status = prowjobv1.ProwJobStatus{
-					StartTime:      now,
-					State:          prowjobv1.TriggeredState,
+					StartTime: now,
+					State:     prowjobv1.TriggeredState,
 				}
 				return pj
 			},
-			expectedPipelineRun: nil,
+			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
+				p.DeletionTimestamp = &now
+				return p
+			},
+			reconcileAndDeleteRuns: true,
 		},
 	}
 
@@ -1117,17 +1139,20 @@ func TestReconcile(t *testing.T) {
 				p := tc.observedPipelineRuns[0]
 				p.Name = name
 				p.Labels[kube.ProwJobIDLabel] = name
+				p.Labels[prowJobName] = name
 				r.pipelines[pk] = *p
 			} else if len(tc.observedPipelineRuns) == 2 {
 				// The first is going to be the meta pipeline, the second the executing pipeline
 				mp := tc.observedPipelineRuns[0]
 				mp.Name = "meta-" + name
 				mp.Labels[kube.ProwJobIDLabel] = name
+				mp.Labels[prowJobName] = name
 				r.pipelines[metapk] = *mp
 
 				p := tc.observedPipelineRuns[1]
 				p.Name = name
 				p.Labels[kube.ProwJobIDLabel] = name
+				p.Labels[prowJobName] = name
 				r.pipelines[pk] = *p
 			}
 
@@ -1156,6 +1181,23 @@ func TestReconcile(t *testing.T) {
 				t.Errorf("prowjobs do not match:\n%s", diff.ObjectReflectDiff(expectedJobs, r.jobs))
 			case !equality.Semantic.DeepEqual(r.pipelines, expectedPipelineRuns):
 				t.Errorf("pipelineruns do not match:\n%s", diff.ObjectReflectDiff(expectedPipelineRuns, r.pipelines))
+			}
+
+			if tc.reconcileAndDeleteRuns {
+				for k, _ := range expectedPipelineRuns {
+					err := reconcile(r, k)
+					if err != nil {
+						if !tc.err {
+							t.Errorf("unexpected error: %v", err)
+						}
+					}
+				}
+
+				for k, _ := range expectedPipelineRuns {
+					if _, ok := r.pipelines[k]; ok {
+						t.Errorf("expected PipelineRun %s to have been deleted but is still present", k)
+					}
+				}
 			}
 		})
 	}

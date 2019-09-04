@@ -323,6 +323,7 @@ type reconciler interface {
 	requestPipelineRun(context, namespace string, pj prowjobv1.ProwJob) (string, error)
 	now() metav1.Time
 	getProwJobURL(prowjobv1.ProwJob) string
+	patchPipelineRun(context, namespace string, b *pipelinev1alpha1.PipelineRun) error
 }
 
 func (c *controller) getPipelineConfig(ctx string) (pipelineConfig, error) {
@@ -371,6 +372,37 @@ func (c *controller) patchProwJob(newpj *prowjobv1.ProwJob) error {
 	}
 	logrus.Infof("Created merge patch: %v", string(patch))
 	_, err = c.pjc.ProwV1().ProwJobs(pj.Namespace).Patch(pj.Name, types.MergePatchType, patch)
+	return err
+}
+
+func (c *controller) patchPipelineRun(context, namespace string, newpr *pipelinev1alpha1.PipelineRun) error {
+	p, err := c.getPipelineConfig(context)
+	if err != nil {
+		return err
+	}
+	pr, err := p.client.TektonV1alpha1().PipelineRuns(namespace).Get(newpr.GetName(), metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting PipelineRun/%s: %v", newpr.GetName(), err)
+	}
+	// Skip updating the resource version to avoid conflicts
+	newpr.ObjectMeta.ResourceVersion = pr.ObjectMeta.ResourceVersion
+	newprData, err := json.Marshal(newpr)
+	if err != nil {
+		return fmt.Errorf("marshaling the new PipelineRun/%s: %v", newpr.GetName(), err)
+	}
+	prData, err := json.Marshal(pr)
+	if err != nil {
+		return fmt.Errorf("marshaling the PipelineRun/%s: %v", pr.GetName(), err)
+	}
+	patch, err := jsonpatch.CreateMergePatch(prData, newprData)
+	if err != nil {
+		return fmt.Errorf("creating merge patch: %v", err)
+	}
+	if len(patch) == 0 {
+		return nil
+	}
+	logrus.Infof("Created merge patch: %v", string(patch))
+	_, err = p.client.TektonV1alpha1().PipelineRuns(namespace).Patch(pr.Name, types.MergePatchType, patch)
 	return err
 }
 
@@ -631,10 +663,13 @@ func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.Pro
 				StartTime: c.now(),
 				State:     prowjobv1.TriggeredState,
 			}
-			// Delete the existing PipelineRun(s) so that we don't get confused by them in subsequent reconciliation.
+			// Queue the existing PipelineRun(s) for deletion so that we don't get confused by them in subsequent reconciliation.
 			for _, r := range runs {
 				logrus.Infof("Delete pipelinerun: %s", r.Name)
-				if err := c.deletePipelineRun(context, namespace, r.Name); err != nil {
+				newpr := r.DeepCopy()
+				now := c.now()
+				newpr.DeletionTimestamp = &now
+				if err := c.patchPipelineRun(context, namespace, newpr); err != nil {
 					return fmt.Errorf("delete pipelinerun: %v", err)
 				}
 			}
