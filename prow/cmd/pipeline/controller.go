@@ -525,20 +525,20 @@ func reconcile(c reconciler, key string) error {
 		if err != nil {
 			return fmt.Errorf("no pipelinerun found with name %s: %v", name, err)
 		}
-		prowJobName := p.Labels[prowJobName]
-		if prowJobName == "" {
+		prowJob := p.Labels[prowJobName]
+		if prowJob == "" {
 			return fmt.Errorf("no prowjob name label for pipelinerun %s: %v", name, err)
 		}
 
-		pj, err = c.getProwJob(prowJobName)
+		pj, err = c.getProwJob(prowJob)
 		if err != nil {
 			return fmt.Errorf("no matching prowjob for pipelinerun %s: %v", name, err)
 		}
 
-		selector := fmt.Sprintf("%s = %s", prowJobName, name)
+		selector := fmt.Sprintf("%s = %s", prowJobName, pj.Name)
 		runs, err = c.getPipelineRunsWithSelector(ctx, namespace, selector)
 		if err != nil {
-			return fmt.Errorf("get pipelineruns %s by prow job %s: %v", key, prowJobName, err)
+			return fmt.Errorf("get pipelineruns %s by label %s:%s %v", key, prowJobName, pj.Name, err)
 		}
 		havePipelineRun = true
 
