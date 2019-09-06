@@ -557,6 +557,12 @@ func reconcile(c reconciler, key string) error {
 		if err != nil {
 			return fmt.Errorf("no pipelinerun found with name %s: %v", name, err)
 		}
+
+		// Don't reconcile any PipelineRuns that don't have the created-by-prow label set to true.
+		switch v, ok := p.Labels[kube.CreatedByProw]; {
+		case !ok, v != "true":
+			return nil
+		}
 		prowJob := p.Labels[prowJobName]
 		if prowJob == "" {
 			return fmt.Errorf("no prowjob name label for pipelinerun %s: %v", name, err)
@@ -663,14 +669,14 @@ func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.Pro
 				StartTime: c.now(),
 				State:     prowjobv1.TriggeredState,
 			}
-			// Queue the existing PipelineRun(s) for deletion so that we don't get confused by them in subsequent reconciliation.
+			// Remove the prowJobName label from existing PipelineRun(s) so that we don't get confused by them in subsequent reconciliation.
 			for _, r := range runs {
-				logrus.Infof("Delete pipelinerun: %s", r.Name)
+				logrus.Infof("Removing prowjob labels from pipelinerun: %s", r.Name)
 				newpr := r.DeepCopy()
-				now := c.now()
-				newpr.DeletionTimestamp = &now
+				newpr.Labels[prowJobName] = ""
+				newpr.Labels[kube.CreatedByProw] = "false"
 				if err := c.patchPipelineRun(context, namespace, newpr); err != nil {
-					return fmt.Errorf("delete pipelinerun: %v", err)
+					return fmt.Errorf("removing prowjob labels from pipelinerun: %v", err)
 				}
 			}
 		} else {

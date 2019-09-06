@@ -307,15 +307,15 @@ func TestReconcile(t *testing.T) {
 		return p
 	}
 	cases := []struct {
-		name                   string
-		namespace              string
-		context                string
-		observedJob            *prowjobv1.ProwJob
-		observedPipelineRuns   []*pipelinev1alpha1.PipelineRun
-		expectedJob            func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob
-		expectedPipelineRun    func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun
-		reconcileAndDeleteRuns bool
-		err                    bool
+		name                 string
+		namespace            string
+		context              string
+		observedJob          *prowjobv1.ProwJob
+		observedPipelineRuns []*pipelinev1alpha1.PipelineRun
+		expectedJob          func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob
+		expectedPipelineRun  func(prowjobv1.ProwJob, pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun
+		reconcileRemovedRuns bool
+		err                  bool
 	}{{
 		name: "new prow job creates pipeline",
 		observedJob: &prowjobv1.ProwJob{
@@ -1046,10 +1046,11 @@ func TestReconcile(t *testing.T) {
 				return pj
 			},
 			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
-				p.DeletionTimestamp = &now
+				p.Labels[prowJobName] = ""
+				p.Labels[kube.CreatedByProw] = "false"
 				return p
 			},
-			reconcileAndDeleteRuns: true,
+			reconcileRemovedRuns: true,
 		},
 		{
 			name: "with successful metapipeline and failed pipeline with race condition",
@@ -1103,10 +1104,11 @@ func TestReconcile(t *testing.T) {
 				return pj
 			},
 			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
-				p.DeletionTimestamp = &now
+				p.Labels[prowJobName] = ""
+				p.Labels[kube.CreatedByProw] = "false"
 				return p
 			},
-			reconcileAndDeleteRuns: true,
+			reconcileRemovedRuns: true,
 		},
 	}
 
@@ -1183,19 +1185,13 @@ func TestReconcile(t *testing.T) {
 				t.Errorf("pipelineruns do not match:\n%s", diff.ObjectReflectDiff(expectedPipelineRuns, r.pipelines))
 			}
 
-			if tc.reconcileAndDeleteRuns {
-				for k, _ := range expectedPipelineRuns {
+			if tc.reconcileRemovedRuns {
+				for k := range expectedPipelineRuns {
 					err := reconcile(r, k)
 					if err != nil {
 						if !tc.err {
 							t.Errorf("unexpected error: %v", err)
 						}
-					}
-				}
-
-				for k, _ := range expectedPipelineRuns {
-					if _, ok := r.pipelines[k]; ok {
-						t.Errorf("expected PipelineRun %s to have been deleted but is still present", k)
 					}
 				}
 			}
