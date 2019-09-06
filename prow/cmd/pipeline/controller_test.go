@@ -1046,8 +1046,10 @@ func TestReconcile(t *testing.T) {
 				return pj
 			},
 			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
-				p.Labels[prowJobName] = ""
-				p.Labels[kube.CreatedByProw] = "false"
+				newLabels := p.Labels
+				delete(newLabels, prowJobName)
+				delete(newLabels, kube.CreatedByProw)
+				p.Labels = newLabels
 				return p
 			},
 			reconcileRemovedRuns: true,
@@ -1104,8 +1106,10 @@ func TestReconcile(t *testing.T) {
 				return pj
 			},
 			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
-				p.Labels[prowJobName] = ""
-				p.Labels[kube.CreatedByProw] = "false"
+				newLabels := p.Labels
+				delete(newLabels, prowJobName)
+				delete(newLabels, kube.CreatedByProw)
+				p.Labels = newLabels
 				return p
 			},
 			reconcileRemovedRuns: true,

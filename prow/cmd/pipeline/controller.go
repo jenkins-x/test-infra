@@ -559,8 +559,7 @@ func reconcile(c reconciler, key string) error {
 		}
 
 		// Don't reconcile any PipelineRuns that don't have the created-by-prow label set to true.
-		switch v, ok := p.Labels[kube.CreatedByProw]; {
-		case !ok, v != "true":
+		if v, ok := p.Labels[kube.CreatedByProw]; !ok || v != "true" {
 			return nil
 		}
 		prowJob := p.Labels[prowJobName]
@@ -673,8 +672,10 @@ func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.Pro
 			for _, r := range runs {
 				logrus.Infof("Removing prowjob labels from pipelinerun: %s", r.Name)
 				newpr := r.DeepCopy()
-				newpr.Labels[prowJobName] = ""
-				newpr.Labels[kube.CreatedByProw] = "false"
+				newLabels := newpr.Labels
+				delete(newLabels, prowJobName)
+				delete(newLabels, kube.CreatedByProw)
+				newpr.Labels = newLabels
 				if err := c.patchPipelineRun(context, namespace, newpr); err != nil {
 					return fmt.Errorf("removing prowjob labels from pipelinerun: %v", err)
 				}
