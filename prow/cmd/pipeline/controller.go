@@ -693,10 +693,8 @@ func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.Pro
 			npj.Status.Description = msg
 
 			// Set the status build ID and URL if they're empty
-			for _, r := range runs {
-				if npj.Status.BuildID != "" && npj.Status.URL != "" {
-					continue
-				}
+			if len(runs) > 0 && (npj.Status.BuildID == "" || npj.Status.URL == "") {
+				r := runs[0]
 				logrus.Infof("Setting build ID and URL for ProwJob/%s from PipelineRun %s", pj.GetName(), r.Name)
 				npj.Status.BuildID = getBuildNumber(r)
 				npj.Status.URL = c.getProwJobURL(*pj)
