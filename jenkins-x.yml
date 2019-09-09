@@ -86,3 +86,6 @@ pipelineConfig:
             - name: build-and-push-image
               image: gcr.io/jenkinsxio/prow-builder:0.0.5
               command: /workspace/source/prow/push.sh
+            - name: update-bot
+              image: gcr.io/jenkinsxio/builder-maven:0.1.742
+              command: /workspace/source/prow/update-bot.sh
