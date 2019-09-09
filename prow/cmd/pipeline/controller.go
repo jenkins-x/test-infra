@@ -61,10 +61,11 @@ import (
 )
 
 const (
-	controllerName = "prow-pipeline-crd"
-	prowJobName    = "prowJobName"
-	pipelineRun    = "PipelineRun"
-	prowJob        = "ProwJob"
+	controllerName   = "prow-pipeline-crd"
+	prowJobName      = "prowJobName"
+	pipelineRun      = "PipelineRun"
+	prowJob          = "ProwJob"
+	buildNumberLabel = "build"
 
 	// Abort pipeline run request which don't return in 5 mins.
 	maxPipelineRunRequestTimeout = 5 * time.Minute
@@ -622,7 +623,7 @@ func reconcile(c reconciler, key string) error {
 				return fmt.Errorf("finding pipeline %q: %v", pipelineRunName, err)
 			}
 			runs = append(runs, p)
-			pj.Status.BuildID = getBuildID(p)
+			pj.Status.BuildID = getBuildNumber(p)
 			pj.Status.URL = c.getProwJobURL(*pj)
 		} else {
 			logrus.Infof("Create pipelinerun using embedded spec: %s", key)
@@ -690,6 +691,14 @@ func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.Pro
 			}
 			npj.Status.State = state
 			npj.Status.Description = msg
+
+			// Set the status build ID and URL if they're empty
+			if len(runs) > 0 && (npj.Status.BuildID == "" || npj.Status.URL == "") {
+				r := runs[0]
+				logrus.Infof("Setting build ID and URL for ProwJob/%s from PipelineRun %s", pj.GetName(), r.Name)
+				npj.Status.BuildID = getBuildNumber(r)
+				npj.Status.URL = c.getProwJobURL(*pj)
+			}
 		}
 		logrus.Infof("Update ProwJob/%s: %s - %s [ %s ]", pj.GetName(), haveState, npj.Status.State, msg)
 		if err := c.patchProwJob(npj); err != nil {
@@ -867,6 +876,8 @@ func makePipelineRunWithPrefix(pj prowjobv1.ProwJob, buildID string, pr *pipelin
 		Name:  "build_id",
 		Value: buildID,
 	})
+	p.Labels[buildNumberLabel] = buildID
+
 	rb := pipelinev1alpha1.PipelineResourceBinding{
 		Name: name,
 		ResourceRef: pipelinev1alpha1.PipelineResourceRef{
@@ -940,11 +951,10 @@ func (c *controller) requestPipelineRun(context, namespace string, pj prowjobv1.
 	return "", fmt.Errorf("no PipelineRun object found returned by pipeline runner")
 }
 
-func getBuildID(pr *pipelinev1alpha1.PipelineRun) string {
-	for _, param := range pr.Spec.Params {
-		if param.Name == "build_id" {
-			return param.Value
-		}
+func getBuildNumber(pr *pipelinev1alpha1.PipelineRun) string {
+	buildNum := pr.Labels[buildNumberLabel]
+	if buildNum != "" {
+		return buildNum
 	}
 	// use a default build number if the real build number cannot be parsed
 	return "1"
