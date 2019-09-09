@@ -61,10 +61,11 @@ import (
 )
 
 const (
-	controllerName = "prow-pipeline-crd"
-	prowJobName    = "prowJobName"
-	pipelineRun    = "PipelineRun"
-	prowJob        = "ProwJob"
+	controllerName   = "prow-pipeline-crd"
+	prowJobName      = "prowJobName"
+	pipelineRun      = "PipelineRun"
+	prowJob          = "ProwJob"
+	buildNumberLabel = "build"
 
 	// Abort pipeline run request which don't return in 5 mins.
 	maxPipelineRunRequestTimeout = 5 * time.Minute
@@ -877,7 +878,7 @@ func makePipelineRunWithPrefix(pj prowjobv1.ProwJob, buildID string, pr *pipelin
 		Name:  "build_id",
 		Value: buildID,
 	})
-	p.Labels["build"] = buildID
+	p.Labels[buildNumberLabel] = buildID
 
 	rb := pipelinev1alpha1.PipelineResourceBinding{
 		Name: name,
@@ -953,7 +954,7 @@ func (c *controller) requestPipelineRun(context, namespace string, pj prowjobv1.
 }
 
 func getBuildNumber(pr *pipelinev1alpha1.PipelineRun) string {
-	buildNum := pr.Labels["build"]
+	buildNum := pr.Labels[buildNumberLabel]
 	if buildNum != "" {
 		return buildNum
 	}
