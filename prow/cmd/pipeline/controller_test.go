@@ -1446,6 +1446,7 @@ func TestMakePipelineRun(t *testing.T) {
 				ObjectMeta: pipelineMeta(pj),
 				Spec:       *pj.Spec.PipelineRunSpec,
 			}
+			expected.Labels[buildNumberLabel] = "so-many-pipelines"
 			expected.Spec.Params = append(expected.Spec.Params, pipelinev1alpha1.Param{
 				Name:  "build_id",
 				Value: randomPipelineRunID,
