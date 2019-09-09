@@ -535,6 +535,7 @@ func TestReconcile(t *testing.T) {
 			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
 				pj.Status.State = prowjobv1.TriggeredState
 				pj.Status.Description = descScheduling
+				pj.Status.BuildID = "5"
 				return pj
 			},
 			expectedPipelineRun: noPipelineRunChange,
@@ -573,6 +574,7 @@ func TestReconcile(t *testing.T) {
 					StartTime:   now,
 					State:       prowjobv1.TriggeredState,
 					Description: "scheduling",
+					BuildID:     "1",
 				}
 				return pj
 			},
@@ -614,6 +616,7 @@ func TestReconcile(t *testing.T) {
 					CompletionTime: &now,
 					State:          prowjobv1.SuccessState,
 					Description:    "hello",
+					BuildID:        "22",
 				}
 				return pj
 			},
@@ -655,6 +658,7 @@ func TestReconcile(t *testing.T) {
 					CompletionTime: &now,
 					State:          prowjobv1.FailureState,
 					Description:    "hello",
+					BuildID:        "21",
 				}
 				return pj
 			},
@@ -840,6 +844,7 @@ func TestReconcile(t *testing.T) {
 					CompletionTime: &now,
 					State:          prowjobv1.SuccessState,
 					Description:    "Exec pipeline",
+					BuildID:        "5",
 				}
 				return pj
 			},
@@ -895,6 +900,7 @@ func TestReconcile(t *testing.T) {
 					StartTime:   now,
 					State:       prowjobv1.PendingState,
 					Description: "Exec pipeline",
+					BuildID:     "5",
 				}
 				return pj
 			},
@@ -950,6 +956,7 @@ func TestReconcile(t *testing.T) {
 					CompletionTime: &now,
 					State:          prowjobv1.FailureState,
 					Description:    "Exec pipeline",
+					BuildID:        "5",
 				}
 				return pj
 			},
@@ -1002,6 +1009,7 @@ func TestReconcile(t *testing.T) {
 					StartTime:   now,
 					State:       prowjobv1.TriggeredState,
 					Description: "scheduling",
+					BuildID:     "5",
 				}
 				return pj
 			},
