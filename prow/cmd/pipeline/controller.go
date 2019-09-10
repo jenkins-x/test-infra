@@ -69,10 +69,14 @@ const (
 
 	// Abort pipeline run request which don't return in 5 mins.
 	maxPipelineRunRequestTimeout = 5 * time.Minute
+)
 
-	// Error message that shows up in the PipelineRun status for a race condition where the Pipeline is not yet in the
-	// PipelineRun controller's lister when it tries to trigger the PipelineRun
-	pipelineRunShouldRetryMessage = "can't be found:pipeline.tekton.dev"
+var (
+	// Error messages that show up in the PipelineRun status for race conditions that should lead to the run being retried
+	pipelineRunShouldRetryMessages = []string{
+		"can't be found:pipeline.tekton.dev",
+		"it contains Tasks that don't exist",
+	}
 )
 
 type controller struct {
@@ -658,12 +662,21 @@ func reconcile(c reconciler, key string) error {
 	return updateProwJobState(c, pj, wantState, wantMsg, ctx, namespace, runs)
 }
 
+func pipelineRunShouldRetry(msg string) bool {
+	for _, retryMsg := range pipelineRunShouldRetryMessages {
+		if strings.Contains(msg, retryMsg) {
+			return true
+		}
+	}
+	return false
+}
+
 func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.ProwJobState, msg, context, namespace string, runs []*pipelinev1alpha1.PipelineRun) error {
 	haveState := pj.Status.State
 	haveMsg := pj.Status.Description
 	if haveState != state || haveMsg != msg {
 		npj := pj.DeepCopy()
-		if state == prowjobv1.FailureState && strings.Contains(msg, pipelineRunShouldRetryMessage) {
+		if state == prowjobv1.FailureState && pipelineRunShouldRetry(msg) {
 			// If the pipeline failed due to the known race condition, wipe the status and retry.
 			npj.Status = prowjobv1.ProwJobStatus{
 				StartTime: c.now(),
