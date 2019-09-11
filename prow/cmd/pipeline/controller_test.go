@@ -1122,6 +1122,115 @@ func TestReconcile(t *testing.T) {
 			},
 			reconcileRemovedRuns: true,
 		},
+		{
+			name: "prowjob retries when pipeline run fails with missing task race condition",
+			observedJob: &prowjobv1.ProwJob{
+				Spec: prowjobv1.ProwJobSpec{
+					Agent:           prowjobv1.TektonAgent,
+					PipelineRunSpec: &pipelineSpec,
+				},
+				Status: prowjobv1.ProwJobStatus{
+					State:       prowjobv1.PendingState,
+					Description: "fancy",
+				},
+			},
+			observedPipelineRuns: func() []*pipelinev1alpha1.PipelineRun {
+				pj := prowjobv1.ProwJob{}
+				pj.Spec.Type = prowjobv1.PeriodicJob
+				pj.Spec.Agent = prowjobv1.TektonAgent
+				pj.Spec.PipelineRunSpec = &pipelineSpec
+				pr := makePipelineGitResource(pj)
+				p, err := makePipelineRun(pj, "21", pr)
+				if err != nil {
+					panic(err)
+				}
+				p.Status.SetCondition(&duckv1alpha1.Condition{
+					Type:   duckv1alpha1.ConditionSucceeded,
+					Status: corev1.ConditionFalse,
+					Message: "Pipeline jx/jenkins-x-environment-tekton-we-xm2mg-13 can''t be Run;\n" +
+						"it contains Tasks that don't exist: Couldn't retrieve Task \"jenkins-x-environment-tekton-we-xm2mg-release-13\":\n" +
+						"task.tekton.dev \"jenkins-x-environment-tekton-we-xm2mg-release-13\"",
+				})
+				p.CreationTimestamp = metav1.Now()
+				return []*pipelinev1alpha1.PipelineRun{p}
+			}(),
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
+				pj.Status = prowjobv1.ProwJobStatus{
+					StartTime: now,
+					State:     prowjobv1.TriggeredState,
+				}
+				return pj
+			},
+			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
+				newLabels := p.Labels
+				delete(newLabels, prowJobName)
+				delete(newLabels, kube.CreatedByProw)
+				p.Labels = newLabels
+				return p
+			},
+			reconcileRemovedRuns: true,
+		},
+		{
+			name: "with successful metapipeline and failed pipeline with missing task race condition",
+			observedJob: &prowjobv1.ProwJob{
+				Spec: prowjobv1.ProwJobSpec{
+					Agent:           prowjobv1.TektonAgent,
+					PipelineRunSpec: &pipelineSpec,
+				},
+				Status: prowjobv1.ProwJobStatus{
+					State:       prowjobv1.PendingState,
+					Description: "fancy",
+				},
+			},
+			observedPipelineRuns: func() []*pipelinev1alpha1.PipelineRun {
+				pj := prowjobv1.ProwJob{}
+				pj.Spec.Type = prowjobv1.PeriodicJob
+				pj.Spec.Agent = prowjobv1.TektonAgent
+				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{
+					ServiceAccount: "robot",
+				}
+				pr := makePipelineGitResource(pj)
+				metaP, err := makePipelineRunWithPrefix(pj, "5", pr, "meta")
+				if err != nil {
+					panic(err)
+				}
+				metaP.Status.SetCondition(&duckv1alpha1.Condition{
+					Type:    duckv1alpha1.ConditionSucceeded,
+					Status:  corev1.ConditionTrue,
+					Reason:  "Succeeded",
+					Message: "Metapipeline",
+				})
+				metaP.CreationTimestamp = metav1.Now()
+				execP, err := makePipelineRun(pj, "5", pr)
+				if err != nil {
+					panic(err)
+				}
+				execP.Status.SetCondition(&duckv1alpha1.Condition{
+					Type:   duckv1alpha1.ConditionSucceeded,
+					Status: corev1.ConditionFalse,
+					Message: "Pipeline jx/jenkins-x-environment-tekton-we-xm2mg-13 can''t be Run;\n" +
+						"it contains Tasks that don't exist: Couldn't retrieve Task \"jenkins-x-environment-tekton-we-xm2mg-release-13\":\n" +
+						"task.tekton.dev \"jenkins-x-environment-tekton-we-xm2mg-release-13\"",
+				})
+				execP.CreationTimestamp = metav1.Now()
+				return []*pipelinev1alpha1.PipelineRun{metaP, execP}
+			}(),
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
+				pj.Status = prowjobv1.ProwJobStatus{
+					StartTime: now,
+					State:     prowjobv1.TriggeredState,
+				}
+				return pj
+			},
+			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
+				newLabels := p.Labels
+				delete(newLabels, prowJobName)
+				delete(newLabels, kube.CreatedByProw)
+				p.Labels = newLabels
+				return p
+			},
+			reconcileRemovedRuns: true,
+		},
 	}
 
 	for _, tc := range cases {
