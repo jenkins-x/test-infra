@@ -1231,6 +1231,51 @@ func TestReconcile(t *testing.T) {
 			},
 			reconcileRemovedRuns: true,
 		},
+		{
+			name: "with no build id on prowjob and running metapipeline",
+			observedJob: &prowjobv1.ProwJob{
+				Spec: prowjobv1.ProwJobSpec{
+					Agent:           prowjobv1.TektonAgent,
+					PipelineRunSpec: &pipelineSpec,
+				},
+				Status: prowjobv1.ProwJobStatus{
+					StartTime:   now,
+					State:       prowjobv1.PendingState,
+					Description: "Metapipeline",
+				},
+			},
+			observedPipelineRuns: func() []*pipelinev1alpha1.PipelineRun {
+				pj := prowjobv1.ProwJob{}
+				pj.Spec.Type = prowjobv1.PeriodicJob
+				pj.Spec.Agent = prowjobv1.TektonAgent
+				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{
+					ServiceAccount: "robot",
+				}
+				pr := makePipelineGitResource(pj)
+				metaP, err := makePipelineRunWithPrefix(pj, "5", pr, "meta")
+				if err != nil {
+					panic(err)
+				}
+				metaP.Status.SetCondition(&duckv1alpha1.Condition{
+					Type:    duckv1alpha1.ConditionSucceeded,
+					Status:  corev1.ConditionUnknown,
+					Reason:  "Running",
+					Message: "Metapipeline",
+				})
+
+				return []*pipelinev1alpha1.PipelineRun{metaP}
+			}(),
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
+				pj.Status = prowjobv1.ProwJobStatus{
+					StartTime:   now,
+					State:       prowjobv1.PendingState,
+					Description: "Metapipeline",
+					BuildID:     "5",
+				}
+				return pj
+			},
+			expectedPipelineRun: noPipelineRunChange,
+		},
 	}
 
 	for _, tc := range cases {

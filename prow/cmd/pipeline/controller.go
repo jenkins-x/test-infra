@@ -674,7 +674,7 @@ func pipelineRunShouldRetry(msg string) bool {
 func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.ProwJobState, msg, context, namespace string, runs []*pipelinev1alpha1.PipelineRun) error {
 	haveState := pj.Status.State
 	haveMsg := pj.Status.Description
-	if haveState != state || haveMsg != msg {
+	if haveState != state || haveMsg != msg || pj.Status.BuildID == "" {
 		npj := pj.DeepCopy()
 		if state == prowjobv1.FailureState && pipelineRunShouldRetry(msg) {
 			// If the pipeline failed due to the known race condition, wipe the status and retry.
@@ -706,11 +706,16 @@ func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.Pro
 			npj.Status.Description = msg
 
 			// Set the status build ID and URL if they're empty
-			if len(runs) > 0 && (npj.Status.BuildID == "" || npj.Status.URL == "") {
-				r := runs[0]
-				logrus.Infof("Setting build ID and URL for ProwJob/%s from PipelineRun %s", pj.GetName(), r.Name)
-				npj.Status.BuildID = getBuildNumber(r)
-				npj.Status.URL = c.getProwJobURL(*pj)
+			if len(runs) > 0 && npj.Status.BuildID == "" {
+				for _, r := range runs {
+					buildID := getBuildNumber(r)
+					if buildID != "" {
+						logrus.Infof("Setting build ID %s and URL for ProwJob/%s from PipelineRun %s", buildID, pj.GetName(), r.Name)
+						npj.Status.BuildID = buildID
+						npj.Status.URL = c.getProwJobURL(*pj)
+						break
+					}
+				}
 			}
 		}
 		logrus.Infof("Update ProwJob/%s: %s - %s [ %s ]", pj.GetName(), haveState, npj.Status.State, msg)
