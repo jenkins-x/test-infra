@@ -712,7 +712,7 @@ func updateProwJobState(c reconciler, pj *prowjobv1.ProwJob, state prowjobv1.Pro
 					if buildID != "" {
 						logrus.Infof("Setting build ID %s and URL for ProwJob/%s from PipelineRun %s", buildID, pj.GetName(), r.Name)
 						npj.Status.BuildID = buildID
-						npj.Status.URL = c.getProwJobURL(*pj)
+						npj.Status.URL = c.getProwJobURL(*npj)
 						break
 					}
 				}
