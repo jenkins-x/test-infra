@@ -89,12 +89,6 @@ func containers(jb config.JobBase) []v1.Container {
 		containers = append(containers, jb.Spec.Containers...)
 		containers = append(containers, jb.Spec.InitContainers...)
 	}
-	if jb.BuildSpec != nil {
-		containers = append(containers, jb.BuildSpec.Steps...)
-		if jb.BuildSpec.Source != nil && jb.BuildSpec.Source.Custom != nil {
-			containers = append(containers, *jb.BuildSpec.Source.Custom)
-		}
-	}
 	return containers
 }
 

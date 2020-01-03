@@ -54,7 +54,6 @@ require (
 	github.com/jinzhu/inflection v0.0.0-20151009084129-3272df6c21d0 // indirect
 	github.com/jinzhu/now v0.0.0-20181116074157-8ec929ed50c3 // indirect
 	github.com/json-iterator/go v1.1.6 // indirect
-	github.com/knative/build v0.3.1-0.20190326080750-9bc0e357d17a
 	github.com/knative/pkg v0.0.0-20190329001853-baafd8072ebd
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/lib/pq v1.0.0 // indirect

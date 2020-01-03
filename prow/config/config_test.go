@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	buildv1alpha1 "github.com/knative/build/pkg/apis/build/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -435,7 +434,6 @@ periodics:
 }
 
 func TestValidateAgent(t *testing.T) {
-	b := string(prowjobv1.KnativeBuildAgent)
 	jenk := string(prowjobv1.JenkinsAgent)
 	k := string(prowjobv1.KubernetesAgent)
 	ns := "default"
@@ -462,7 +460,7 @@ func TestValidateAgent(t *testing.T) {
 		{
 			name: "spec requires kubernetes agent",
 			base: func(j *JobBase) {
-				j.Agent = b
+				j.Agent = jenk
 			},
 		},
 		{
@@ -472,28 +470,9 @@ func TestValidateAgent(t *testing.T) {
 			},
 		},
 		{
-			name: "build_spec requires knative-build agent",
-			base: func(j *JobBase) {
-				j.DecorationConfig = nil
-				j.Spec = nil
-
-				j.BuildSpec = &buildv1alpha1.BuildSpec{}
-			},
-		},
-		{
-			name: "knative-build agent requires build_spec",
-			base: func(j *JobBase) {
-				j.DecorationConfig = nil
-				j.Spec = nil
-
-				j.Agent = b
-			},
-		},
-		{
 			name: "decoration requires kubernetes agent",
 			base: func(j *JobBase) {
-				j.Agent = b
-				j.BuildSpec = &buildv1alpha1.BuildSpec{}
+				j.Agent = jenk
 			},
 		},
 		{
@@ -510,31 +489,12 @@ func TestValidateAgent(t *testing.T) {
 			},
 		},
 		{
-			name: "custom namespace requires knative-build agent",
-			base: func(j *JobBase) {
-				s := "custom-namespace"
-				j.Namespace = &s
-			},
-		},
-		{
 			name: "accept kubernetes agent",
 			pass: true,
 		},
 		{
 			name: "accept kubernetes agent without decoration",
 			base: func(j *JobBase) {
-				j.DecorationConfig = nil
-			},
-			pass: true,
-		},
-		{
-			name: "accept knative-build agent",
-			base: func(j *JobBase) {
-				j.Agent = b
-				j.BuildSpec = &buildv1alpha1.BuildSpec{}
-				ns := "custom-namespace"
-				j.Namespace = &ns
-				j.Spec = nil
 				j.DecorationConfig = nil
 			},
 			pass: true,
@@ -551,7 +511,7 @@ func TestValidateAgent(t *testing.T) {
 		{
 			name: "error_on_eviction requires kubernetes agent",
 			base: func(j *JobBase) {
-				j.Agent = b
+				j.Agent = jenk
 				j.ErrorOnEviction = true
 			},
 		},
@@ -843,7 +803,6 @@ func TestValidateLabels(t *testing.T) {
 
 func TestValidateJobBase(t *testing.T) {
 	ka := string(prowjobv1.KubernetesAgent)
-	ba := string(prowjobv1.KnativeBuildAgent)
 	ja := string(prowjobv1.JenkinsAgent)
 	goodSpec := v1.PodSpec{
 		Containers: []v1.Container{
@@ -862,16 +821,6 @@ func TestValidateJobBase(t *testing.T) {
 				Name:      "name",
 				Agent:     ka,
 				Spec:      &goodSpec,
-				Namespace: &ns,
-			},
-			pass: true,
-		},
-		{
-			name: "valid build job",
-			base: JobBase{
-				Name:      "name",
-				Agent:     ba,
-				BuildSpec: &buildv1alpha1.BuildSpec{},
 				Namespace: &ns,
 			},
 			pass: true,
@@ -899,7 +848,7 @@ func TestValidateJobBase(t *testing.T) {
 			name: "invalid agent",
 			base: JobBase{
 				Name:      "name",
-				Agent:     ba,
+				Agent:     ja,
 				Spec:      &goodSpec, // want BuildSpec
 				Namespace: &ns,
 			},
@@ -1005,7 +954,7 @@ periodics:
 				`
 periodics:
 - interval: 10m
-  agent: knative-build
+  agent: kubernetes
   spec:
   name: foo`,
 			},

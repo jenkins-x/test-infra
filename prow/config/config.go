@@ -39,7 +39,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
 
-	buildapi "github.com/knative/build/pkg/apis/build/v1alpha1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config/org"
 	"k8s.io/test-infra/prow/github"
@@ -679,19 +678,19 @@ func (c *Config) finalizeJobConfig() error {
 	c.defaultPeriodicFields(c.Periodics)
 
 	for _, v := range c.AllPresubmits(nil) {
-		if err := resolvePresets(v.Name, v.Labels, v.Spec, v.BuildSpec, c.Presets); err != nil {
+		if err := resolvePresets(v.Name, v.Labels, v.Spec, c.Presets); err != nil {
 			return err
 		}
 	}
 
 	for _, v := range c.AllPostsubmits(nil) {
-		if err := resolvePresets(v.Name, v.Labels, v.Spec, v.BuildSpec, c.Presets); err != nil {
+		if err := resolvePresets(v.Name, v.Labels, v.Spec, c.Presets); err != nil {
 			return err
 		}
 	}
 
 	for _, v := range c.AllPeriodics() {
-		if err := resolvePresets(v.Name, v.Labels, v.Spec, v.BuildSpec, c.Presets); err != nil {
+		if err := resolvePresets(v.Name, v.Labels, v.Spec, c.Presets); err != nil {
 			return err
 		}
 	}
@@ -1125,10 +1124,6 @@ func validateAgent(v JobBase, podNamespace string) error {
 		return fmt.Errorf("job specs require agent: %s (found %q)", k, agent)
 	case agent == k && v.Spec == nil:
 		return errors.New("kubernetes jobs require a spec")
-	case v.BuildSpec != nil && agent != b:
-		return fmt.Errorf("job build_specs require agent: %s (found %q)", b, agent)
-	case agent == b && v.BuildSpec == nil:
-		return errors.New("knative-build jobs require a build_spec")
 	case v.DecorationConfig != nil && agent != k && agent != b:
 		// TODO(fejta): only source decoration supported...
 		return fmt.Errorf("decoration requires agent: %s or %s (found %q)", k, b, agent)
@@ -1159,17 +1154,11 @@ func validateDecoration(container v1.Container, config *prowapi.DecorationConfig
 	return nil
 }
 
-func resolvePresets(name string, labels map[string]string, spec *v1.PodSpec, buildSpec *buildapi.BuildSpec, presets []Preset) error {
+func resolvePresets(name string, labels map[string]string, spec *v1.PodSpec, presets []Preset) error {
 	for _, preset := range presets {
 		if spec != nil {
 			if err := mergePreset(preset, labels, spec.Containers, &spec.Volumes); err != nil {
 				return fmt.Errorf("job %s failed to merge presets for podspec: %v", name, err)
-			}
-		}
-
-		if buildSpec != nil {
-			if err := mergePreset(preset, labels, buildSpec.Steps, &buildSpec.Volumes); err != nil {
-				return fmt.Errorf("job %s failed to merge presets for buildspec: %v", name, err)
 			}
 		}
 	}

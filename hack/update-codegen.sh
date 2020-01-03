@@ -23,7 +23,7 @@ export GOPATH="${GOPATH:-$HOME/go}"
 export PATH="${GOPATH}/bin:${PATH}"
 
 ensure-in-gopath() {
-  if [[ "${PWD}" != "${GOPATH}/src/k8s.io/test-infra" ]]; then
+  if [[ "${PWD}" != "${GOPATH}/src/github.com/jenkins-x/test-infra" ]]; then
     echo Sadly, $(basename "$0") must run inside GOPATH=$GOPATH, not $PWD >&2
     exit 1
   fi

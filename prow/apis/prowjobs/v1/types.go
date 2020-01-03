@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	buildv1alpha1 "github.com/knative/build/pkg/apis/build/v1alpha1"
 	pipelinev1alpha1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -140,11 +139,6 @@ type ProwJobSpec struct {
 	// PodSpec provides the basis for running the test under
 	// a Kubernetes agent
 	PodSpec *corev1.PodSpec `json:"pod_spec,omitempty"`
-
-	// BuildSpec provides the basis for running the test as
-	// a build-crd resource
-	// https://github.com/knative/build
-	BuildSpec *buildv1alpha1.BuildSpec `json:"build_spec,omitempty"`
 
 	// PipelineRunSpec provides the basis for running the test as
 	// a pipeline-crd resource
