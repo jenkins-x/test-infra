@@ -1276,6 +1276,67 @@ func TestReconcile(t *testing.T) {
 			},
 			expectedPipelineRun: noPipelineRunChange,
 		},
+		{
+			name: "with successful metapipeline and failed pipeline with tekton 0.8.0 race condition",
+			observedJob: &prowjobv1.ProwJob{
+				Spec: prowjobv1.ProwJobSpec{
+					Agent:           prowjobv1.TektonAgent,
+					PipelineRunSpec: &pipelineSpec,
+				},
+				Status: prowjobv1.ProwJobStatus{
+					State:       prowjobv1.PendingState,
+					Description: "fancy",
+				},
+			},
+			observedPipelineRuns: func() []*pipelinev1alpha1.PipelineRun {
+				pj := prowjobv1.ProwJob{}
+				pj.Spec.Type = prowjobv1.PeriodicJob
+				pj.Spec.Agent = prowjobv1.TektonAgent
+				pj.Spec.PipelineRunSpec = &pipelinev1alpha1.PipelineRunSpec{
+					ServiceAccount: "robot",
+				}
+				pr := makePipelineGitResource(pj)
+				metaP, err := makePipelineRunWithPrefix(pj, "5", pr, "meta")
+				if err != nil {
+					panic(err)
+				}
+				metaP.Status.SetCondition(&duckv1alpha1.Condition{
+					Type:    duckv1alpha1.ConditionSucceeded,
+					Status:  corev1.ConditionTrue,
+					Reason:  "Succeeded",
+					Message: "Metapipeline",
+				})
+				metaP.CreationTimestamp = metav1.Now()
+				execP, err := makePipelineRun(pj, "5", pr)
+				if err != nil {
+					panic(err)
+				}
+				execP.Status.SetCondition(&duckv1alpha1.Condition{
+					Type:   duckv1alpha1.ConditionSucceeded,
+					Status: corev1.ConditionFalse,
+					Message: "Error retrieving pipeline for pipelinerun jx/jenkins-x-jx-pr-5266-images-16:\n" +
+						"error when listing pipelines for pipelineRun jenkins-x-jx-pr-5266-images-16:\n" +
+						"pipeline.tekton.dev \"jenkins-x-jx-pr-5266-images-16\" not found",
+				})
+				execP.CreationTimestamp = metav1.Now()
+				return []*pipelinev1alpha1.PipelineRun{metaP, execP}
+			}(),
+			expectedJob: func(pj prowjobv1.ProwJob, _ pipelinev1alpha1.PipelineRun) prowjobv1.ProwJob {
+				pj.Status = prowjobv1.ProwJobStatus{
+					StartTime: now,
+					State:     prowjobv1.TriggeredState,
+				}
+				return pj
+			},
+			expectedPipelineRun: func(_ prowjobv1.ProwJob, p pipelinev1alpha1.PipelineRun) pipelinev1alpha1.PipelineRun {
+				newLabels := p.Labels
+				delete(newLabels, prowJobName)
+				delete(newLabels, kube.CreatedByProw)
+				p.Labels = newLabels
+				return p
+			},
+			reconcileRemovedRuns: true,
+		},
 	}
 
 	for _, tc := range cases {
