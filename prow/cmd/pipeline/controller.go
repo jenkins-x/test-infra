@@ -76,6 +76,7 @@ var (
 	pipelineRunShouldRetryMessages = []string{
 		"can't be found:pipeline.tekton.dev",
 		"it contains Tasks that don't exist",
+		"Error retrieving pipeline for pipelinerun",
 	}
 )
 
